@@ -2,12 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Materia extends Model
 {
-   protected $fillable = [
+    use HasFactory;
+
+    protected $fillable = [
         'nombre',
         'descripcion',
+        'tema_padre',
+        'tema_hijo',
     ];
 }

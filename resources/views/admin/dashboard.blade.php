@@ -29,11 +29,11 @@
                     </ul>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link active" href="{{ route('admin.materias.index') }}">
+                    <a class="nav-link active" href="{{ url('/admin/materias') }}">
                         Gestión de Materias
                     </a>
+                </li>   
 
-                </li>
 
                 <!-- Podés agregar más secciones aquí -->
             </ul>
