@@ -31,9 +31,16 @@ class AuthenticatedSessionController extends Controller
 
         // 🔐 Redirecciones según rol
         return match ($user->role) {
-            'administrador' => redirect('/admin'), // 👉 ahora dirige al panel Filament
-            'profesor' => redirect()->route('profesor.dashboard'),
-            'alumno' => redirect()->route('alumno.dashboard'),
+            // 👉 Panel Filament de administrador
+            'admin' => redirect('/admin'),
+
+            // 👉 Panel Filament de profesor
+            'profesor' => redirect('/profesor'),
+
+            // 👉 Dashboard manual del alumno (todavía Blade)
+            'alumno' => redirect('/alumno/dashboard'),
+
+            // 👉 Rol desconocido
             default => redirect('/login'),
         };
     }

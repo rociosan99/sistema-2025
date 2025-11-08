@@ -15,4 +15,10 @@ class Institucion extends Model
         'institucion_nombre',
         'institucion_descripcion',
     ];
+
+        public function carreras()
+    {
+        return $this->hasMany(Carrera::class, 'carrera_institucion_id', 'institucion_id');
+    }
+
 }

@@ -28,6 +28,11 @@ class TemaResource extends Resource
     // 🔤 Campo que se muestra como título del registro
     protected static ?string $recordTitleAttribute = 'tema_nombre';
 
+    //sidebar
+    protected static string|\UnitEnum|null $navigationGroup = 'Gestión Académica';
+    protected static ?int $navigationSort = 40; // 4to
+
+
     // ⚙️ Formulario (usa tu TemaForm.php)
     public static function form(Schema $schema): Schema
     {

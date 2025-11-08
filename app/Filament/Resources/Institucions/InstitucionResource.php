@@ -28,6 +28,10 @@ class InstitucionResource extends Resource
     // 🔤 Campo que se mostrará como título
     protected static ?string $recordTitleAttribute = 'institucion_nombre';
 
+    // 🗂️ Grupo y orden dentro del sidebar
+    protected static string|\UnitEnum|null $navigationGroup = 'Gestión Académica';
+    protected static ?int $navigationSort = 10; // aparece primero en el grupo
+
     // ⚙️ Formulario
     public static function form(Schema $schema): Schema
     {

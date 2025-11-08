@@ -15,7 +15,7 @@ use Illuminate\View\View;
 class RegisteredUserController extends Controller
 {
     /**
-     * Display the registration view.
+     * Mostrar formulario de registro.
      */
     public function create(): View
     {
@@ -23,41 +23,41 @@ class RegisteredUserController extends Controller
     }
 
     /**
-     * Handle an incoming registration request.
-     *
-     * @throws \Illuminate\Validation\ValidationException
+     * Guardar nuevo usuario registrado.
      */
-   public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
-        // Validación de los datos, incluyendo el rol
+        // ✅ Validar datos, incluyendo el apellido y el rol
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'apellido' => ['required', 'string', 'max:255'], // nuevo campo
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role' => ['required', 'in:admin,profesor,alumno'], // Validación del rol
+            'role' => ['required', 'in:admin,profesor,alumno'],
         ]);
 
-        // Crear usuario
+        // ✅ Crear usuario
         $user = User::create([
             'name' => $request->name,
+            'apellido' => $request->apellido, // nuevo campo
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role' => $request->role, // Guardar rol
+            'role' => $request->role,
         ]);
 
-        // Evento de usuario registrado
+        // ✅ Disparar evento de registro
         event(new Registered($user));
 
-        // Loguear usuario
+        // ✅ Autenticar al usuario
         Auth::login($user);
 
-        // Redirigir según rol
+        // ✅ Redirigir según el rol
         if ($user->role === 'admin') {
-            return redirect()->route('admin.dashboard');
+            return redirect('/admin'); // panel admin de Filament
         } elseif ($user->role === 'profesor') {
-            return redirect()->route('profesor.dashboard');
-        } else { // alumno
-            return redirect()->route('alumno.dashboard');
+            return redirect('/profesor'); // panel profesor de Filament
+        } else {
+            return redirect('/alumno/dashboard'); // vista manual del alumno
         }
     }
 }
