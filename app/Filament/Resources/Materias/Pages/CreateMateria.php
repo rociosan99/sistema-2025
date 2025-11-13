@@ -9,8 +9,16 @@ class CreateMateria extends CreateRecord
 {
     protected static string $resource = MateriaResource::class;
 
-    public function getRedirectUrl(): string
+    // ⭐ Redirigir al index después de crear
+    protected function getRedirectUrl(): string
     {
         return $this->getResource()::getUrl('index');
+    }
+
+    // ⭐ Guardar relación con temas
+    protected function afterCreate(): void
+    {
+        $temas = $this->data['temas'] ?? [];
+        $this->record->temas()->sync($temas);
     }
 }

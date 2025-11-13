@@ -12,12 +12,8 @@ class MateriasTable
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('materia_id')
-                    ->label('ID')
-                    ->sortable(),
-
                 Tables\Columns\TextColumn::make('materia_nombre')
-                    ->label('Nombre de la materia')
+                    ->label('Materia')
                     ->searchable()
                     ->sortable(),
 
@@ -25,35 +21,18 @@ class MateriasTable
                     ->label('Año')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('materia_descripcion')
-                    ->label('Descripción')
-                    ->limit(60),
-
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('Creado')
-                    ->dateTime('d/m/Y H:i')
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                // 🔽 Filtro por año
-                Tables\Filters\SelectFilter::make('materia_anio')
-                    ->label('Filtrar por año')
-                    ->options(
-                        fn () => \App\Models\Materia::query()
-                            ->select('materia_anio')
-                            ->distinct()
-                            ->orderBy('materia_anio', 'desc')
-                            ->pluck('materia_anio', 'materia_anio')
-                    ),
+                // ⭐ CORREGIDO: ahora muestra los temas
+                Tables\Columns\TextColumn::make('temas_list')
+                    ->label('Temas asociados')
+                    ->getStateUsing(function ($record) {
+                        return $record->temas->pluck('tema_nombre')->join(', ');
+                    })
+                    ->wrap()
+                    ->placeholder('—'),
             ])
             ->recordActions([
-                Actions\EditAction::make()->label('Editar'),
-                Actions\DeleteAction::make()->label('Eliminar'),
-            ])
-            ->toolbarActions([
-                Actions\ActionGroup::make([
-                    Actions\DeleteBulkAction::make()->label('Eliminar seleccionados'),
-                ]),
+                Actions\EditAction::make(),
+                Actions\DeleteAction::make(),
             ]);
     }
 }

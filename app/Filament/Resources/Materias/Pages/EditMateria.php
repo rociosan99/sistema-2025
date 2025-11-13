@@ -3,17 +3,22 @@
 namespace App\Filament\Resources\Materias\Pages;
 
 use App\Filament\Resources\Materias\MateriaResource;
-use Filament\Actions\DeleteAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditMateria extends EditRecord
 {
     protected static string $resource = MateriaResource::class;
 
-    protected function getHeaderActions(): array
+    // ⭐ Redirigir al index después de editar
+    protected function getRedirectUrl(): string
     {
-        return [
-            DeleteAction::make(),
-        ];
+        return $this->getResource()::getUrl('index');
+    }
+
+    // ⭐ Guardar relación con temas
+    protected function afterSave(): void
+    {
+        $temas = $this->data['temas'] ?? [];
+        $this->record->temas()->sync($temas);
     }
 }

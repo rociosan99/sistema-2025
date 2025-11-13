@@ -4,45 +4,41 @@ namespace App\Filament\Resources\Materias\Schemas;
 
 use Filament\Forms;
 use Filament\Schemas\Schema;
+use App\Models\Tema;
 
 class MateriaForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema->schema([
+
             Forms\Components\TextInput::make('materia_nombre')
                 ->label('Nombre de la materia')
-                ->placeholder('Ejemplo: Matemática Discreta')
                 ->required()
-                ->maxLength(150)
-                ->unique(ignoreRecord: true),
+                ->maxLength(150),
 
             Forms\Components\Textarea::make('materia_descripcion')
                 ->label('Descripción')
-                ->placeholder('Descripción breve de la materia (opcional)')
-                ->rows(3)
                 ->nullable()
                 ->columnSpanFull(),
 
-            // Campo para año
             Forms\Components\TextInput::make('materia_anio')
                 ->label('Año')
                 ->numeric()
                 ->required()
                 ->minValue(1900)
-                ->maxValue(now()->year) // 🔸 usa el año actual automáticamente
-                ->rules([
-                    'integer',
-                    'min:1900',
-                    'max:' . now()->year,
-                ])
-                ->placeholder(now()->year)
-                ->helperText('Ingrese un año entre 1900 y ' . now()->year)
-                ->validationMessages([
-                    'max' => 'El año no puede ser mayor al actual (' . now()->year . ').',
-                    'min' => 'El año no puede ser menor a 1900.',
-                    'integer' => 'Debe ingresar un año válido.',
-                ]),
-        ]); //cerramos correctamente el array y el método schema()
+                ->maxValue(now()->year),
+
+            // ⭐ Temas con jerarquía + colores + guardado correcto
+            Forms\Components\CheckboxList::make('temas')
+                ->label('Temas asociados')
+                ->options(fn () => Tema::flattenTreeWithIndent())
+                ->allowHtml()
+                ->columns(2)
+                ->searchable()
+                ->dehydrateStateUsing(fn ($state) => $state)
+                ->statePath('temas')
+                ->columnSpanFull(),
+        ]);
     }
 }
