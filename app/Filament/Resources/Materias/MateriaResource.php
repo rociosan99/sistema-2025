@@ -21,10 +21,7 @@ class MateriaResource extends Resource
     protected static ?string $pluralModelLabel = 'Materias';
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-book-open';
-
-    // 👈 ESTA ES LA FIRMA correcta en tu proyecto (igual que CarreraResource)
     protected static string|\UnitEnum|null $navigationGroup = 'Gestión Académica';
-
     protected static ?int $navigationSort = 30;
 
     public static function form(Schema $schema): Schema
@@ -45,9 +42,9 @@ class MateriaResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => ListMaterias::route('/'),
+            'index'  => ListMaterias::route('/'),
             'create' => CreateMateria::route('/create'),
-            'edit' => EditMateria::route('/{record}/edit'),
+            'edit'   => EditMateria::route('/{record}/edit'),
         ];
     }
 }

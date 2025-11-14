@@ -45,9 +45,7 @@ class Tema extends Model
             ->get();
     }
 
-    /**
-     * Genera lista jerárquica con colores y HTML aplicado
-     */
+    // 🔹 Etiquetas jerárquicas con colores
     public static function flattenTreeWithIndent(): array
     {
         $tree = self::getTree();
@@ -55,21 +53,20 @@ class Tema extends Model
 
         $walk = function ($nodes, $level = 0) use (&$walk, &$result) {
             foreach ($nodes as $node) {
+                $indent = str_repeat('&nbsp;&nbsp;&nbsp;', $level);
 
-                // INDENTACIÓN
-                $indent = str_repeat('— ', $level);
-
-                // 🎨 COLORES POR NIVEL
                 if ($level === 0) {
-                    // PADRE — azul fuerte + negrita
-                    $label = "<span style='color:#005bbb; font-weight:bold; font-size:1.05rem;'>{$node->tema_nombre}</span>";
+                    $color = '#005bbb';
+                    $style = "color: {$color}; font-weight: bold; font-size: 1.05rem;";
                 } elseif ($level === 1) {
-                    // HIJO — verde
-                    $label = "<span style='color:#00994d;'>{$indent}{$node->tema_nombre}</span>";
+                    $color = '#00994d';
+                    $style = "color: {$color};";
                 } else {
-                    // NIETO — verde claro
-                    $label = "<span style='color:#66cc99;'>{$indent}{$node->tema_nombre}</span>";
+                    $color = '#66cc99';
+                    $style = "color: {$color};";
                 }
+
+                $label = "<span style=\"{$style}\">{$indent}{$node->tema_nombre}</span>";
 
                 $result[$node->tema_id] = $label;
 
@@ -82,5 +79,30 @@ class Tema extends Model
         $walk($tree);
 
         return $result;
+    }
+
+    /**
+     * 🔹 Devuelve todos los descendientes (hijos, nietos, etc.) de un tema
+     */
+    public static function getDescendantIds(int $temaId): array
+    {
+        $tema = self::with('childrenRecursive')->find($temaId);
+
+        if (! $tema) {
+            return [];
+        }
+
+        $ids = [];
+
+        $walk = function ($node) use (&$ids, &$walk) {
+            foreach ($node->childrenRecursive as $child) {
+                $ids[] = $child->tema_id;
+                $walk($child);
+            }
+        };
+
+        $walk($tema);
+
+        return $ids;
     }
 }
