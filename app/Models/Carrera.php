@@ -3,30 +3,30 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Carrera extends Model
 {
     protected $table = 'carreras';
     protected $primaryKey = 'carrera_id';
-    public $incrementing = true;
-    protected $keyType = 'int';
 
     protected $fillable = [
-        'carrera_institucion_id',
         'carrera_nombre',
         'carrera_descripcion',
+        'carrera_institucion_id',
     ];
 
-    // Cada carrera pertenece a una institución
+    // RELACIÓN: Una carrera pertenece a una institución
     public function institucion()
     {
         return $this->belongsTo(Institucion::class, 'carrera_institucion_id', 'institucion_id');
     }
 
-    public function materias()
+    // RELACIÓN: Una carrera tiene muchos planes de estudio
+    public function planesEstudio(): HasMany
     {
-        return $this->belongsToMany(Materia::class, 'carrera_materias', 'carreramateria_carrera_id', 'carreramateria_materia_id')
-                    ->withTimestamps();
+        return $this->hasMany(PlanEstudio::class, 'plan_carrera_id', 'carrera_id');
     }
 
+   
 }

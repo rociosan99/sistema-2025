@@ -24,25 +24,22 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        // Autenticar credenciales
         $request->authenticate();
         $request->session()->regenerate();
 
         $user = $request->user();
 
-        // 🔐 Redirecciones según rol
-        return match ($user->role) {
-            // 👉 Panel Filament de administrador
-            'admin' => redirect('/admin'),
-
-            // 👉 Panel Filament de profesor
-            'profesor' => redirect('/profesor'),
-
-            // 👉 Dashboard manual del alumno (todavía Blade)
-            'alumno' => redirect('/alumno/dashboard'),
-
-            // 👉 Rol desconocido
-            default => redirect('/login'),
+        // 🔐 Redirección correcta según el rol REAL de tu BD
+        $redirectPath = match ($user->role) {
+            'administrador' => '/admin',            // Panel Filament admin
+            'profesor'      => '/profesor',         // Panel Filament profesor
+            'alumno'        => '/alumno/dashboard', // Blade del alumno, si lo creás
+            default         => '/login',
         };
+
+        // 🔁 Usa intended() si venía de página protegida
+        return redirect()->intended($redirectPath);
     }
 
     /**
@@ -55,6 +52,6 @@ class AuthenticatedSessionController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/');
+        return redirect('/login');
     }
 }

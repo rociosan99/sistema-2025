@@ -17,15 +17,7 @@ class Materia extends Model
         'materia_anio',
     ];
 
-    public function carreras()
-    {
-        return $this->belongsToMany(
-            Carrera::class,
-            'carrera_materias',
-            'carreramateria_materia_id',
-            'carreramateria_carrera_id'
-        )->withTimestamps();
-    }
+
 
     public function temas()
     {

@@ -17,27 +17,49 @@ class Tema extends Model
         'tema_id_tema_padre',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | RELACIONES
+    |--------------------------------------------------------------------------
+    */
+
+    // 🔹 Relación muchos a muchos con materias (histórico)
     public function materias()
     {
         return $this->belongsToMany(Materia::class, 'materia_tema', 'tema_id', 'materia_id')
                     ->withTimestamps();
     }
 
+    // 🔹 Relación muchos a muchos con programas (ACTUAL)
+    public function programas()
+    {
+        return $this->belongsToMany(Programa::class, 'programa_tema', 'tema_id', 'programa_id')
+                    ->withTimestamps();
+    }
+
+    // 🔹 Tema padre
     public function parent()
     {
         return $this->belongsTo(self::class, 'tema_id_tema_padre', 'tema_id');
     }
 
+    // 🔹 Hijos directos
     public function children()
     {
         return $this->hasMany(self::class, 'tema_id_tema_padre', 'tema_id');
     }
 
+    // 🔹 Carga recursiva de hijos (subniveles infinitos)
     public function childrenRecursive()
     {
         return $this->children()->with('childrenRecursive');
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | OBTENER ÁRBOL COMPLETO
+    |--------------------------------------------------------------------------
+    */
     public static function getTree()
     {
         return self::whereNull('tema_id_tema_padre')
@@ -45,7 +67,14 @@ class Tema extends Model
             ->get();
     }
 
-    // 🔹 Etiquetas jerárquicas con colores
+    /*
+    |--------------------------------------------------------------------------
+    | LISTA APLANADA CON INDENTACIÓN Y COLORES
+    |--------------------------------------------------------------------------
+    | Esta función ya la venías usando en materias/programas.
+    | La dejamos igual, solo optimizada.
+    |--------------------------------------------------------------------------
+    */
     public static function flattenTreeWithIndent(): array
     {
         $tree = self::getTree();
@@ -53,23 +82,29 @@ class Tema extends Model
 
         $walk = function ($nodes, $level = 0) use (&$walk, &$result) {
             foreach ($nodes as $node) {
+
+                // Espaciado según nivel
                 $indent = str_repeat('&nbsp;&nbsp;&nbsp;', $level);
 
+                // 🎨 COLORES
                 if ($level === 0) {
-                    $color = '#005bbb';
-                    $style = "color: {$color}; font-weight: bold; font-size: 1.05rem;";
+                    // Tema padre
+                    $style = "color:#005bbb; font-weight:bold; font-size:1.05rem;";
                 } elseif ($level === 1) {
-                    $color = '#00994d';
-                    $style = "color: {$color};";
+                    // Hijo nivel 1
+                    $style = "color:#00994d;";
                 } else {
-                    $color = '#66cc99';
-                    $style = "color: {$color};";
+                    // Hijo nivel 2+
+                    $style = "color:#66cc99;";
                 }
 
-                $label = "<span style=\"{$style}\">{$indent}{$node->tema_nombre}</span>";
+                // Etiqueta HTML del tema
+                $label = "<span style=\"$style\">{$indent}{$node->tema_nombre}</span>";
 
+                // Agregar a la lista final
                 $result[$node->tema_id] = $label;
 
+                // Recorrer hijos
                 if ($node->childrenRecursive->isNotEmpty()) {
                     $walk($node->childrenRecursive, $level + 1);
                 }
@@ -81,14 +116,16 @@ class Tema extends Model
         return $result;
     }
 
-    /**
-     * 🔹 Devuelve todos los descendientes (hijos, nietos, etc.) de un tema
-     */
+    /*
+    |--------------------------------------------------------------------------
+    | OBTENER TODOS LOS DESCENDIENTES (para marcar hijos automáticamente)
+    |--------------------------------------------------------------------------
+    */
     public static function getDescendantIds(int $temaId): array
     {
         $tema = self::with('childrenRecursive')->find($temaId);
 
-        if (! $tema) {
+        if (!$tema) {
             return [];
         }
 

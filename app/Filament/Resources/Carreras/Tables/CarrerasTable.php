@@ -26,11 +26,6 @@ class CarrerasTable
                     ->searchable()
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('materias_count')
-                    ->label('Materias')
-                    ->counts('materias')
-                    ->sortable(),
-
                 Tables\Columns\TextColumn::make('carrera_descripcion')
                     ->label('Descripción')
                     ->limit(60),

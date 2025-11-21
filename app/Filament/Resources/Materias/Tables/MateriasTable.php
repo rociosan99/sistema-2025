@@ -21,14 +21,7 @@ class MateriasTable
                     ->label('Año')
                     ->sortable(),
 
-                // ⭐ CORREGIDO: ahora muestra los temas
-                Tables\Columns\TextColumn::make('temas_list')
-                    ->label('Temas asociados')
-                    ->getStateUsing(function ($record) {
-                        return $record->temas->pluck('tema_nombre')->join(', ');
-                    })
-                    ->wrap()
-                    ->placeholder('—'),
+             
             ])
             ->recordActions([
                 Actions\EditAction::make(),

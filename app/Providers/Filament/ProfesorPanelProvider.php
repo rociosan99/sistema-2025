@@ -23,30 +23,23 @@ class ProfesorPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return $panel
-            // Identificación del panel
             ->id('profesor')
             ->path('profesor')
             ->brandName('Panel del Profesor')
+            ->login()
+            ->authGuard('web')
             ->colors([
-                'primary' => Color::Amber, // color temático del panel
+                'primary' => Color::Amber,
             ])
-
-            // Descubrir los recursos del panel
             ->discoverResources(in: app_path('Filament/Profesor/Resources'), for: 'App\Filament\Profesor\Resources')
             ->discoverPages(in: app_path('Filament/Profesor/Pages'), for: 'App\Filament\Profesor\Pages')
             ->discoverWidgets(in: app_path('Filament/Profesor/Widgets'), for: 'App\Filament\Profesor\Widgets')
-
-            // Página principal
             ->pages([
                 Dashboard::class,
             ])
-
-            // Widgets del dashboard
             ->widgets([
                 AccountWidget::class,
             ])
-
-            // Middlewares necesarios para Filament
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -58,11 +51,9 @@ class ProfesorPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
-
-            // Middleware de autenticación y rol
             ->authMiddleware([
-                Authenticate::class, // Autenticación Filament
-                'role:profesor',     // 🔒 Solo usuarios con rol profesor
+                Authenticate::class,
+                'profesor',   // alias nuestro
             ]);
     }
 }
