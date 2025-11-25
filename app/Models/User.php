@@ -2,45 +2,28 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
     protected $fillable = [
         'name',
-        'apellido',   
+        'apellido',
         'email',
         'password',
         'role',
-    
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -49,7 +32,7 @@ class User extends Authenticatable
         ];
     }
 
-    // Helpers de roles
+    // Roles
     public function isAdministrador(): bool
     {
         return $this->role === 'administrador';
@@ -63,5 +46,31 @@ class User extends Authenticatable
     public function isAlumno(): bool
     {
         return $this->role === 'alumno';
+    }
+
+    // RELACIÓN MATERIAS — CORREGIDA
+    public function materias()
+    {
+        return $this->belongsToMany(
+            Materia::class,
+            'profesor_materia',
+            'profesor_id',
+            'materia_id',
+            'id',
+            'materia_id'
+        );
+    }
+
+    // RELACIÓN TEMAS — CORREGIDA
+    public function temas()
+    {
+        return $this->belongsToMany(
+            Tema::class,
+            'profesor_tema',
+            'profesor_id',
+            'tema_id',
+            'id',
+            'tema_id'
+        );
     }
 }
