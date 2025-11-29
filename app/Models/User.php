@@ -73,4 +73,13 @@ class User extends Authenticatable
             'tema_id'
         );
     }
+
+        /**
+     * Disponibilidades semanales del profesor.
+     */
+    public function disponibilidades()
+    {
+        return $this->hasMany(Disponibilidad::class, 'profesor_id', 'id');
+    }
+
 }
