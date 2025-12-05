@@ -17,15 +17,26 @@ class Materia extends Model
         'materia_anio',
     ];
 
+    /**
+     * Una materia tiene varios programas
+     */
+    public function programas()
+    {
+        return $this->hasMany(Programa::class, 'programa_materia_id', 'materia_id');
+    }
 
-
+    /**
+     * Temas de la materia (a través de los programas)
+     */
     public function temas()
     {
-        return $this->belongsToMany(
+        return $this->hasManyThrough(
             Tema::class,
-            'materia_tema',
-            'materia_id',
-            'tema_id'
-        )->withTimestamps();
+            Programa::class,
+            'programa_materia_id', // FK en Programas → Materia
+            'tema_id',             // FK en Temas → Tema
+            'materia_id',          // PK Materia
+            'programa_id'          // PK Programa
+        )->distinct(); 
     }
 }

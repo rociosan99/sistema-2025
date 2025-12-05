@@ -82,4 +82,21 @@ class User extends Authenticatable
         return $this->hasMany(Disponibilidad::class, 'profesor_id', 'id');
     }
 
+        /**
+     * Turnos donde el usuario es ALUMNO.
+     */
+    public function turnosComoAlumno()
+    {
+        return $this->hasMany(Turno::class, 'alumno_id', 'id');
+    }
+
+    /**
+     * Turnos donde el usuario es PROFESOR.
+     */
+    public function turnosComoProfesor()
+    {
+        return $this->hasMany(Turno::class, 'profesor_id', 'id');
+    }
+
+
 }
