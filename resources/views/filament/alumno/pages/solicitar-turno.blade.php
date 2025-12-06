@@ -1,18 +1,42 @@
 <x-filament-panels::page>
-    <div class="space-y-6">
+    <div
+        style="
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        "
+    >
 
         {{-- Encabezado --}}
-        <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-2">
-            <div class="text-lg font-semibold">
+        <div
+            style="
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 20px;
+                background-color: #ffffff;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            "
+        >
+            <div style="font-size: 18px; font-weight: 600;">
                 Solicitar un turno de clase particular
             </div>
-            <p class="text-sm text-gray-600 dark:text-gray-400">
+            <p
+                style="
+                    font-size: 13px;
+                    color: #4b5563;
+                    line-height: 1.6;
+                    margin: 0;
+                "
+            >
                 Estás solicitando un turno
                 @if($this->materia)
-                    para la materia <span class="font-semibold">{{ $this->materia->materia_nombre }}</span>
+                    para la materia <span style="font-weight: 600;">{{ $this->materia->materia_nombre }}</span>
                 @endif
                 @if($this->tema)
-                    — tema: <span class="font-semibold">{{ $this->tema->tema_nombre }}</span>
+                    — tema: <span style="font-weight: 600;">{{ $this->tema->tema_nombre }}</span>
                 @endif
                 .
                 Te mostraremos los profesores que dictan esta materia y sus horarios disponibles.
@@ -20,16 +44,52 @@
         </div>
 
         {{-- Buscador de materia/tema + fecha --}}
-        <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
+        <div
+            style="
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                padding: 20px;
+                background-color: #ffffff;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+            "
+        >
 
             {{-- Buscador --}}
-            <div class="space-y-1">
-                <label class="text-sm font-medium">Buscar materia o tema</label>
-                <div class="flex gap-2">
-                    <div class="relative flex-1">
+            <div
+                style="
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                "
+            >
+                <label
+                    style="
+                        font-size: 13px;
+                        font-weight: 500;
+                    "
+                >
+                    Buscar materia o tema
+                </label>
+
+                <div
+                    style="
+                        display: flex;
+                        gap: 8px;
+                    "
+                >
+                    <div style="position: relative; flex: 1;">
                         <input
                             type="text"
-                            class="w-full rounded-lg border-gray-300 dark:bg-gray-900 dark:border-gray-700 pr-10"
+                            style="
+                                width: 100%;
+                                border-radius: 8px;
+                                border: 1px solid #d1d5db;
+                                padding: 8px 32px 8px 10px;
+                                font-size: 14px;
+                            "
                             placeholder="Ej.: Álgebra, Derivadas, Programación..."
                             wire:model.live="busqueda"
                         >
@@ -38,20 +98,56 @@
                             wire:click="consultarAhora"
                             wire:target="consultarAhora"
                             wire:loading.attr="disabled"
-                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500"
+                            style="
+                                position: absolute;
+                                top: 0;
+                                right: 0;
+                                height: 100%;
+                                padding-right: 10px;
+                                padding-left: 6px;
+                                border: none;
+                                background: transparent;
+                                display: flex;
+                                align-items: center;
+                                cursor: pointer;
+                                color: #6b7280;
+                            "
                         >
-                            <x-heroicon-o-magnifying-glass class="w-5 h-5" />
+                            <x-heroicon-o-magnifying-glass style="width: 20px; height: 20px;" />
                         </button>
                     </div>
                 </div>
 
                 {{-- Sugerencias (autocompletar) --}}
                 @if(!empty($sugerenciasMaterias) || !empty($sugerenciasTemas))
-                    <div class="mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm p-2 space-y-1 text-sm">
+                    <div
+                        style="
+                            margin-top: 8px;
+                            background-color: #ffffff;
+                            border: 1px solid #e5e7eb;
+                            border-radius: 8px;
+                            padding: 6px;
+                            font-size: 13px;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 4px;
+                            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+                        "
+                    >
                         @foreach($sugerenciasMaterias as $m)
                             <button
                                 type="button"
-                                class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                                style="
+                                    width: 100%;
+                                    text-align: left;
+                                    padding: 4px 6px;
+                                    border-radius: 6px;
+                                    border: none;
+                                    background: transparent;
+                                    cursor: pointer;
+                                "
+                                onmouseover="this.style.backgroundColor='#f3f4f6'"
+                                onmouseout="this.style.backgroundColor='transparent'"
                                 wire:click="seleccionarMateria({{ $m['materia_id'] }}, '{{ addslashes($m['materia_nombre']) }}')"
                             >
                                 📘 Materia: {{ $m['materia_nombre'] }}
@@ -61,7 +157,17 @@
                         @foreach($sugerenciasTemas as $t)
                             <button
                                 type="button"
-                                class="w-full text-left px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                                style="
+                                    width: 100%;
+                                    text-align: left;
+                                    padding: 4px 6px;
+                                    border-radius: 6px;
+                                    border: none;
+                                    background: transparent;
+                                    cursor: pointer;
+                                "
+                                onmouseover="this.style.backgroundColor='#f3f4f6'"
+                                onmouseout="this.style.backgroundColor='transparent'"
                                 wire:click="seleccionarTema({{ $t['tema_id'] }}, '{{ addslashes($t['tema_nombre']) }}')"
                             >
                                 🧩 Tema: {{ $t['tema_nombre'] }}
@@ -72,20 +178,49 @@
             </div>
 
             {{-- Fecha --}}
-            <div class="space-y-1">
-                <label class="text-sm font-medium">Fecha de la clase</label>
+            <div
+                style="
+                    display: flex;
+                    flex-direction: column;
+                    gap: 6px;
+                    padding-top: 12px;
+                    border-top: 1px solid #f3f4f6;
+                "
+            >
+                <label
+                    style="
+                        font-size: 13px;
+                        font-weight: 500;
+                    "
+                >
+                    Fecha de la clase
+                </label>
                 <input
                     type="date"
-                    class="w-full md:w-64 rounded-lg border-gray-300 dark:bg-gray-900 dark:border-gray-700"
+                    style="
+                        width: 260px;
+                        max-width: 100%;
+                        border-radius: 8px;
+                        border: 1px solid #d1d5db;
+                        padding: 6px 10px;
+                        font-size: 14px;
+                    "
                     wire:model.live="fecha"
                 >
-                <p class="text-xs text-gray-500 mt-1">
+                <p
+                    style="
+                        font-size: 11px;
+                        color: #6b7280;
+                        margin: 4px 0 0 0;
+                        line-height: 1.5;
+                    "
+                >
                     Seleccioná el día en el que querés consultar los horarios disponibles.
                 </p>
             </div>
 
-            {{-- Botón "Consultar ahora" separado --}}
-            <div class="pt-2">
+            {{-- Botón "Consultar ahora" --}}
+            <div style="padding-top: 8px;">
                 <x-filament::button
                     color="primary"
                     wire:click="consultarAhora"
@@ -96,7 +231,13 @@
                     <span wire:loading.remove wire:target="consultarAhora">Consultar ahora</span>
                     <span wire:loading wire:target="consultarAhora">Buscando…</span>
                 </x-filament::button>
-                <span class="text-xs text-gray-500 ml-2">
+                <span
+                    style="
+                        font-size: 11px;
+                        color: #6b7280;
+                        margin-left: 6px;
+                    "
+                >
                     Te mostraremos los horarios disponibles para la materia/tema elegido.
                 </span>
             </div>
@@ -104,18 +245,53 @@
 
         {{-- Resultado: slots en cards --}}
         @if($fecha)
-            <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div class="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 flex items-center justify-between">
-                    <h3 class="font-semibold">
+            <div
+                style="
+                    border: 1px solid #e5e7eb;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    background-color: #f9fafb;
+                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+                "
+            >
+                <div
+                    style="
+                        padding: 12px 20px;
+                        background-color: #f3f4f6;
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                    "
+                >
+                    <h3
+                        style="
+                            font-size: 15px;
+                            font-weight: 600;
+                            margin: 0;
+                        "
+                    >
                         Turnos disponibles
-                        <span class="text-sm font-normal opacity-70">
+                        <span
+                            style="
+                                font-size: 13px;
+                                font-weight: 400;
+                                opacity: 0.7;
+                            "
+                        >
                             — {{ \Carbon\Carbon::parse($fecha)->isoFormat('dddd D [de] MMMM YYYY') }}
                         </span>
                     </h3>
-                    <span class="text-sm opacity-70">{{ count($slots) }} resultado(s)</span>
+                    <span
+                        style="
+                            font-size: 13px;
+                            opacity: 0.7;
+                        "
+                    >
+                        {{ count($slots) }} resultado(s)
+                    </span>
                 </div>
 
-                <div class="p-4">
+                <div style="padding: 20px;">
                     @php
                         $fechaSel = \Carbon\Carbon::parse($fecha ?? now());
                         $esPasado = $fechaSel->isPast() && !$fechaSel->isToday();
@@ -124,49 +300,142 @@
                     @endphp
 
                     @if($esPasado)
-                        <div class="text-sm text-red-600">
+                        <div
+                            style="
+                                font-size: 13px;
+                                color: #b91c1c;
+                            "
+                        >
                             No podés reservar en fechas pasadas.
                         </div>
                     @elseif(empty($slots))
-                        <p class="text-sm text-gray-500">
+                        <p
+                            style="
+                                font-size: 13px;
+                                color: #6b7280;
+                                margin: 0;
+                            "
+                        >
                             No hay horarios disponibles para esta materia en la fecha seleccionada.
                         </p>
                     @else
-                        <div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                        {{-- GRID de cards --}}
+                        <div
+                            style="
+                                display: grid;
+                                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                                gap: 18px;
+                            "
+                        >
                             @foreach($slots as $i => $s)
                                 @php
                                     $disabled = $esPasado || ($esHoy && ($s['desde'] < $leadEdge));
                                 @endphp
-                                <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-3 flex flex-col justify-between bg-white/70 dark:bg-gray-900">
-                                    <div class="text-sm space-y-1">
-                                        <div class="font-medium">
+
+                                <div
+                                    style="
+                                        border: 1px solid #e5e7eb;
+                                        border-radius: 12px;
+                                        padding: 14px;
+                                        background-color: #ffffff;
+                                        display: flex;
+                                        flex-direction: column;
+                                        justify-content: space-between;
+                                        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+                                    "
+                                >
+                                    <div
+                                        style="
+                                            display: flex;
+                                            flex-direction: column;
+                                            gap: 4px;
+                                            font-size: 13px;
+                                            line-height: 1.5;
+                                        "
+                                    >
+                                        <div
+                                            style="
+                                                font-weight: 600;
+                                                font-size: 14px;
+                                                color: #111827;
+                                            "
+                                        >
                                             {{ $s['desde'] }} – {{ $s['hasta'] }}
                                         </div>
-                                        <div class="text-xs opacity-70">
+
+                                        <div
+                                            style="
+                                                font-size: 12px;
+                                                opacity: 0.75;
+                                            "
+                                        >
                                             Profesor: {{ $s['profesor_nombre'] ?? 'Profesor' }}
                                         </div>
+
                                         @if($this->materia)
-                                            <div class="text-xs opacity-70">
+                                            <div
+                                                style="
+                                                    font-size: 12px;
+                                                    opacity: 0.75;
+                                                "
+                                            >
                                                 Materia: {{ $this->materia->materia_nombre }}
                                             </div>
                                         @endif
+
                                         @if($this->tema)
-                                            <div class="text-xs opacity-70">
+                                            <div
+                                                style="
+                                                    font-size: 12px;
+                                                    opacity: 0.75;
+                                                "
+                                            >
                                                 Tema: {{ $this->tema->tema_nombre }}
                                             </div>
                                         @endif
+
+                                        {{-- 💰 Precios --}}
+                                        @if(!empty($s['precio_por_hora']))
+                                            <div
+                                                style="
+                                                    font-size: 12px;
+                                                    margin-top: 4px;
+                                                "
+                                            >
+                                                Precio por hora:
+                                                <span style="font-weight: 600;">
+                                                    ${{ number_format((float) $s['precio_por_hora'], 0, ',', '.') }}
+                                                </span>
+                                            </div>
+                                        @endif
+
+                                        @if(!empty($s['precio_total']))
+                                            <div
+                                                style="
+                                                    font-size: 12px;
+                                                "
+                                            >
+                                                Precio de este turno:
+                                                <span style="font-weight: 600;">
+                                                    ${{ number_format((float) $s['precio_total'], 0, ',', '.') }}
+                                                </span>
+                                            </div>
+                                        @endif
                                     </div>
-                                    <x-filament::button
-                                        size="sm"
-                                        class="mt-3"
-                                        :disabled="$disabled"
-                                        wire:click="reservar({{ $i }})"
-                                        wire:target="reservar({{ $i }})"
-                                        wire:loading.attr="disabled"
-                                    >
-                                        <span wire:loading.remove wire:target="reservar({{ $i }})">Reservar</span>
-                                        <span wire:loading wire:target="reservar({{ $i }})">Reservando…</span>
-                                    </x-filament::button>
+
+                                    <div style="margin-top: 12px;">
+                                        <x-filament::button
+                                            size="sm"
+                                            class="w-full"
+                                            :disabled="$disabled"
+                                            wire:click="reservar({{ $i }})"
+                                            wire:target="reservar({{ $i }})"
+                                            wire:loading.attr="disabled"
+                                        >
+                                            <span wire:loading.remove wire:target="reservar({{ $i }})">Reservar</span>
+                                            <span wire:loading wire:target="reservar({{ $i }})">Reservando…</span>
+                                        </x-filament::button>
+                                    </div>
                                 </div>
                             @endforeach
                         </div>

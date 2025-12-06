@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SolicitarTurno extends Page
@@ -107,20 +108,32 @@ class SolicitarTurno extends Page
         $this->materia   = Materia::find($materiaId);
         $this->busqueda  = $nombre;
 
+        // Si el usuario ya tenía un tema seleccionado que no corresponde,
+        // lo dejamos tal cual, pero la lógica principal se basa en materiaId.
         $this->sugerenciasMaterias = [];
         $this->sugerenciasTemas    = [];
     }
 
     public function seleccionarTema(int $temaId, string $nombre): void
     {
-        $this->temaId = $temaId;
-        $this->tema   = Tema::find($temaId);
+        $this->temaId   = $temaId;
+        $this->tema     = Tema::find($temaId);
         $this->busqueda = $nombre;
 
         $this->sugerenciasMaterias = [];
         $this->sugerenciasTemas    = [];
 
-        // Si quisieras, acá podrías resolver la materia a partir del tema.
+        // 🟢 Intentar resolver la MATERIA a partir del TEMA
+        // Usando la pivot programa_tema + programas
+        $materiaIdFromTema = DB::table('programa_tema')
+            ->join('programas', 'programa_tema.programa_id', '=', 'programas.programa_id')
+            ->where('programa_tema.tema_id', $temaId)
+            ->value('programas.programa_materia_id');
+
+        if ($materiaIdFromTema) {
+            $this->materiaId = $materiaIdFromTema;
+            $this->materia   = Materia::find($materiaIdFromTema);
+        }
     }
 
     /**
@@ -140,9 +153,10 @@ class SolicitarTurno extends Page
             ]);
         }
 
+        // A esta altura, si viene por tema, ya intentamos resolver la materia.
         if (! $this->materiaId) {
             throw ValidationException::withMessages([
-                'materia' => 'No se pudo determinar la materia. Seleccioná una materia en el buscador.',
+                'materia' => 'No se pudo determinar la materia a partir del tema seleccionado. Verificá la configuración del programa.',
             ]);
         }
 
@@ -154,7 +168,7 @@ class SolicitarTurno extends Page
             ]);
         }
 
-        // 🟢 Usa el servicio para traer TODOS los profesores con disponibilidad para esa materia
+        // Usa el servicio para traer TODOS los profesores con disponibilidad para esa materia
         $slotsCollection = $this->slotService->obtenerSlotsPorMateria(
             $this->materiaId,
             $fecha,
@@ -215,14 +229,16 @@ class SolicitarTurno extends Page
         }
 
         Turno::create([
-            'alumno_id'   => $user->id,
-            'profesor_id' => $slot['profesor_id'],
-            'materia_id'  => $this->materiaId,
-            'tema_id'     => $this->temaId,
-            'fecha'       => $slot['fecha'],
-            'hora_inicio' => $slot['hora_inicio'],
-            'hora_fin'    => $slot['hora_fin'],
-            'estado'      => 'pendiente',
+            'alumno_id'       => $user->id,
+            'profesor_id'     => $slot['profesor_id'],
+            'materia_id'      => $this->materiaId,
+            'tema_id'         => $this->temaId,
+            'fecha'           => $slot['fecha'],
+            'hora_inicio'     => $slot['hora_inicio'],
+            'hora_fin'        => $slot['hora_fin'],
+            'estado'          => 'pendiente',
+            'precio_por_hora' => $slot['precio_por_hora'] ?? null,
+            'precio_total'    => $slot['precio_total'] ?? null,
         ]);
 
         Notification::make()

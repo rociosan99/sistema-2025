@@ -13,6 +13,8 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class DisponibilidadResource extends Resource
 {
@@ -21,9 +23,9 @@ class DisponibilidadResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;
 
     protected static ?string $navigationLabel = 'Disponibilidad';
-    protected static ?string $pluralLabel = 'Disponibilidad';
-    protected static ?string $modelLabel = 'Disponibilidad';
-    protected static ?string $slug = 'disponibilidad';
+    protected static ?string $pluralLabel    = 'Disponibilidad';
+    protected static ?string $modelLabel     = 'Disponibilidad';
+    protected static ?string $slug           = 'disponibilidad';
 
     protected static ?int $navigationSort = 20;
 
@@ -44,5 +46,19 @@ class DisponibilidadResource extends Resource
             'create' => CreateDisponibilidad::route('/create'),
             'edit'   => EditDisponibilidad::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * 🔒 Muy importante:
+     * Solo mostrar las disponibilidades del profesor logueado.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $userId = Auth::id();
+
+        return parent::getEloquentQuery()
+            ->when($userId, function (Builder $query, $userId) {
+                return $query->where('profesor_id', $userId);
+            });
     }
 }

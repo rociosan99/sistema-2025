@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-
 class User extends Authenticatable
 {
     use HasFactory, Notifiable;
@@ -48,8 +47,7 @@ class User extends Authenticatable
         return $this->role === 'alumno';
     }
 
-    // RELACIÓN MATERIAS — CORREGIDA
-    public function materias()
+        public function materias()
     {
         return $this->belongsToMany(
             Materia::class,
@@ -58,7 +56,15 @@ class User extends Authenticatable
             'materia_id',
             'id',
             'materia_id'
-        );
+        )->withPivot('precio_por_hora');
+    }
+
+    // Helper opcional: precio que este profesor cobra por hora
+        public function getPrecioPorHoraParaMateria(int $materiaId): ?float
+    {
+        $materia = $this->materias()->where('materia_id', $materiaId)->first();
+
+        return $materia?->pivot?->precio_por_hora;
     }
 
     // RELACIÓN TEMAS — CORREGIDA
@@ -74,7 +80,7 @@ class User extends Authenticatable
         );
     }
 
-        /**
+    /**
      * Disponibilidades semanales del profesor.
      */
     public function disponibilidades()
@@ -82,7 +88,7 @@ class User extends Authenticatable
         return $this->hasMany(Disponibilidad::class, 'profesor_id', 'id');
     }
 
-        /**
+    /**
      * Turnos donde el usuario es ALUMNO.
      */
     public function turnosComoAlumno()
@@ -97,6 +103,4 @@ class User extends Authenticatable
     {
         return $this->hasMany(Turno::class, 'profesor_id', 'id');
     }
-
-
 }

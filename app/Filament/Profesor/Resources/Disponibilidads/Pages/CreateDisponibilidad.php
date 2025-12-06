@@ -12,15 +12,17 @@ class CreateDisponibilidad extends CreateRecord
 
     /**
      * Antes de guardar, agregamos automáticamente el profesor_id
+     * para que SIEMPRE se asocie la disponibilidad
+     * al profesor que está logueado.
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['profesor_id'] = Auth::id();   // ← SIEMPRE asigna el profesor correcto
+        $data['profesor_id'] = Auth::id();
         return $data;
     }
 
     /**
-     * Redirigir siempre al index después de crear
+     * Después de crear, volver siempre al listado.
      */
     protected function getRedirectUrl(): string
     {

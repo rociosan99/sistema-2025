@@ -20,6 +20,8 @@ class Turno extends Model
         'hora_inicio',
         'hora_fin',
         'estado',
+        'precio_por_hora',  
+        'precio_total',      
     ];
 
     // 🔗 Relaciones

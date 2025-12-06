@@ -34,9 +34,24 @@ class Materia extends Model
             Tema::class,
             Programa::class,
             'programa_materia_id', // FK en Programas → Materia
-            'tema_id',             // FK en Temas → Tema
+            'tema_id',             // PK en Temas
             'materia_id',          // PK Materia
             'programa_id'          // PK Programa
-        )->distinct(); 
+        )->distinct();
+    }
+
+    /**
+     * Profesores que dictan esta materia (con precio por clase en el pivot).
+     */
+    public function profesores()
+    {
+        return $this->belongsToMany(
+            User::class,
+            'profesor_materia',
+            'materia_id',
+            'profesor_id',
+            'materia_id',
+            'id'
+        )->withPivot('precio_por_clase');
     }
 }

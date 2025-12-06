@@ -46,6 +46,7 @@ class SlotService
 
         // Duración del turno en minutos (podés moverlo a config/turnos.php)
         $duracion = config('turnos.duracion_slot', 60);
+        $duracion = (int) ($duracion ?: 60); // por las dudas
 
         foreach ($profesores as $profesor) {
 
@@ -102,7 +103,43 @@ class SlotService
             }
         }
 
-        // 6) Ordenar por fecha, profesor y hora inicio
+        // 👉 Hasta acá es EXACTAMENTE la lógica que vos tenías y que funcionaba 👆
+
+        // 🟡 6) Agregar precio_por_hora y precio_total SIN afectar la generación de slots
+
+        if ($slots->isEmpty()) {
+            // Si no hay slots, ya está.
+            return $slots;
+        }
+
+        // Profesores que efectivamente tienen slots
+        $profesoresConSlots = $slots->pluck('profesor_id')->unique()->toArray();
+
+        // Traer precios desde la pivot profesor_materia (solo anotamos, no filtramos)
+        $preciosPorProfesor = DB::table('profesor_materia')
+            ->where('materia_id', $materiaId)
+            ->whereIn('profesor_id', $profesoresConSlots)
+            ->pluck('precio_por_hora', 'profesor_id')
+            ->toArray();
+
+        // Mapear slots agregando precios (si existen)
+        $slots = $slots->map(function (array $slot) use ($preciosPorProfesor, $duracion) {
+
+            $precioPorHora = $preciosPorProfesor[$slot['profesor_id']] ?? null;
+            $precioTotal   = null;
+
+            if ($precioPorHora !== null) {
+                $horas       = $duracion / 60;
+                $precioTotal = $precioPorHora * $horas;
+            }
+
+            $slot['precio_por_hora'] = $precioPorHora;
+            $slot['precio_total']    = $precioTotal;
+
+            return $slot;
+        });
+
+        // 7) Ordenar por fecha, profesor y hora inicio (igual que antes)
         return $slots
             ->sortBy([
                 ['fecha', 'asc'],
