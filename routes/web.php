@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Mail\TestMail;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,6 +16,12 @@ use Illuminate\Support\Facades\Auth;
 Route::get('/', function () {
     return view('welcome');
 })->name('home');
+
+// 🔴 RUTA SOLO PARA PROBAR MAILTRAP (temporal)
+Route::get('/test-mail', function () {
+    Mail::to('alumno@test.com')->send(new TestMail());
+    return 'Mail enviado correctamente (Mailtrap)';
+});
 
 // Cierre de sesión forzado (opcional)
 Route::get('/force-logout', function () {
@@ -30,7 +38,5 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// ✅ Ya no definimos dashboard de profesor/alumno aquí.
-// Filament crea sus propias rutas bajo /profesor o /admin automáticamente.
-
+// Filament maneja sus propias rutas (/admin, /profesor, /alumno)
 require __DIR__.'/auth.php';
