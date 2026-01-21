@@ -20,12 +20,10 @@ use Illuminate\Validation\ValidationException;
 class SolicitarTurno extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
-
     protected static ?string $navigationLabel = 'Solicitar turno';
-
     protected string $view = 'filament.alumno.pages.solicitar-turno';
 
-    // 🔹 Datos de contexto
+    // 🔹 Contexto
     public ?int $profesorId = null;
     public ?int $materiaId  = null;
     public ?int $temaId     = null;
@@ -73,6 +71,10 @@ class SolicitarTurno extends Page
             $this->busqueda = "{$this->materia->materia_nombre} - {$this->tema->tema_nombre}";
         }
     }
+
+    /* =========================
+       🔍 BUSCADOR (NO TOCAR)
+       ========================= */
 
     public function updatedBusqueda(string $value): void
     {
@@ -123,20 +125,30 @@ class SolicitarTurno extends Page
         }
     }
 
+    /* =========================
+       CONSULTAR DISPONIBILIDAD
+       ========================= */
+
     public function consultarAhora(): void
     {
         if (! $this->fecha) {
-            throw ValidationException::withMessages(['fecha' => 'Seleccioná una fecha.']);
+            throw ValidationException::withMessages([
+                'fecha' => 'Seleccioná una fecha.',
+            ]);
         }
 
         if (! $this->materiaId) {
-            throw ValidationException::withMessages(['busqueda' => 'Seleccioná una materia o tema.']);
+            throw ValidationException::withMessages([
+                'busqueda' => 'Seleccioná una materia o tema.',
+            ]);
         }
 
         $fecha = Carbon::createFromFormat('Y-m-d', $this->fecha);
 
         if ($fecha->isPast() && ! $fecha->isToday()) {
-            throw ValidationException::withMessages(['fecha' => 'No podés reservar fechas pasadas.']);
+            throw ValidationException::withMessages([
+                'fecha' => 'No podés reservar fechas pasadas.',
+            ]);
         }
 
         $this->slots = $this->slotService
@@ -144,54 +156,61 @@ class SolicitarTurno extends Page
             ->toArray();
     }
 
-    /**
-     * ✅ RESERVAR + ENVIAR MAIL
-     */
+    /* =========================
+       RESERVAR TURNO (VALIDADO)
+       ========================= */
+
     public function reservar(int $index): void
     {
         $alumno = Auth::user();
 
         if (! isset($this->slots[$index])) {
-            throw ValidationException::withMessages(['slot' => 'Horario inválido.']);
+            throw ValidationException::withMessages([
+                'slot' => 'Horario inválido.',
+            ]);
         }
 
         $slot = $this->slots[$index];
 
-        // Chequeo superposición
-        $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
-            ->whereDate('fecha', $slot['fecha'])
-            ->where(function ($q) use ($slot) {
-                $q->where('hora_inicio', '<', $slot['hora_fin'])
-                  ->where('hora_fin', '>', $slot['hora_inicio']);
-            })
-            ->whereIn('estado', ['pendiente', 'confirmado'])
-            ->exists();
+        DB::transaction(function () use ($slot, $alumno) {
 
-        if ($hayChoque) {
-            throw ValidationException::withMessages(['slot' => 'Ese horario ya fue tomado.']);
-        }
+            // 🔒 VALIDACIÓN DE SOLAPAMIENTO
+            $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
+                ->whereDate('fecha', $slot['fecha'])
+                ->where(function ($q) use ($slot) {
+                    $q->where('hora_inicio', '<', $slot['hora_fin'])
+                      ->where('hora_fin', '>', $slot['hora_inicio']);
+                })
+                ->whereIn('estado', ['pendiente', 'confirmado'])
+                ->lockForUpdate()
+                ->exists();
 
-        // 🟢 Crear turno
-        $turno = Turno::create([
-            'alumno_id'       => $alumno->id,
-            'profesor_id'     => $slot['profesor_id'],
-            'materia_id'      => $this->materiaId,
-            'tema_id'         => $this->temaId,
-            'fecha'           => $slot['fecha'],
-            'hora_inicio'     => $slot['hora_inicio'],
-            'hora_fin'        => $slot['hora_fin'],
-            'estado'          => 'pendiente',
-            'precio_por_hora' => $slot['precio_por_hora'] ?? null,
-            'precio_total'    => $slot['precio_total'] ?? null,
-        ]);
+            if ($hayChoque) {
+                throw ValidationException::withMessages([
+                    'slot' => 'Ese horario ya no está disponible.',
+                ]);
+            }
 
-        // 🟢 Enviar mail al profesor
-        Mail::to($turno->profesor->email)
-            ->send(new TurnoSolicitado($turno));
+            $turno = Turno::create([
+                'alumno_id'       => $alumno->id,
+                'profesor_id'     => $slot['profesor_id'],
+                'materia_id'      => $this->materiaId,
+                'tema_id'         => $this->temaId,
+                'fecha'           => $slot['fecha'],
+                'hora_inicio'     => $slot['hora_inicio'],
+                'hora_fin'        => $slot['hora_fin'],
+                'estado'          => 'pendiente',
+                'precio_por_hora' => $slot['precio_por_hora'] ?? null,
+                'precio_total'    => $slot['precio_total'] ?? null,
+            ]);
+
+            Mail::to($turno->profesor->email)
+                ->send(new TurnoSolicitado($turno));
+        });
 
         Notification::make()
             ->title('Turno solicitado')
-            ->body('El profesor recibirá tu solicitud por mail.')
+            ->body('El profesor recibirá tu solicitud.')
             ->success()
             ->send();
 

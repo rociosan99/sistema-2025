@@ -23,11 +23,14 @@ class Tema extends Model
     |--------------------------------------------------------------------------
     */
 
-    // 🔹 Relación muchos a muchos con materias (histórico)
-    public function materias()
+     public function materias()
     {
-        return $this->belongsToMany(Materia::class, 'materia_tema', 'tema_id', 'materia_id')
-                    ->withTimestamps();
+        return $this->belongsToMany(
+            Materia::class,
+            'materia_tema',
+            'tema_id',     // FK en pivot que apunta a temas
+            'materia_id'   // FK en pivot que apunta a materias
+        )->withTimestamps();
     }
 
     // 🔹 Relación muchos a muchos con programas (ACTUAL)

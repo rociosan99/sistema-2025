@@ -12,7 +12,7 @@ class CreateMateria extends CreateRecord
     protected function afterCreate(): void
     {
         $temas = $this->data['temas'] ?? [];
-        $this->record->temas()->sync($temas);
+        $this->record->temasPivot()->sync($temas);
     }
 
     protected function getRedirectUrl(): string

@@ -9,30 +9,22 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserIsProfesor
 {
-    /**
-     * Maneja una solicitud entrante.
-     */
     public function handle(Request $request, Closure $next): Response
     {
-        // Si no está autenticado → ir al login general (Breeze)
+        // No autenticado → login
         if (!Auth::check()) {
-            return redirect('/login');
+            return redirect()->route('login');
         }
 
-        $user = Auth::user();
-
-        // Si el usuario NO es profesor, lo redirigimos según su rol
-        if ($user->role !== 'profesor') {
-            $redirectPath = match ($user->role) {
-                'administrador' => '/admin',              // Panel de admin
-                'alumno'        => '/alumno/dashboard',    // Futuro dashboard alumno
-                default         => '/login',              // Desconocido → login
+        // Autenticado pero no profesor → redirigir según rol
+        if (Auth::user()->role !== 'profesor') {
+            return match (Auth::user()->role) {
+                'administrador' => redirect('/admin'),
+                'alumno'        => redirect('/alumno/dashboard'),
+                default         => redirect()->route('login'),
             };
-
-            return redirect($redirectPath);
         }
 
-        // Si es profesor, puede continuar al panel /profesor
         return $next($request);
     }
 }

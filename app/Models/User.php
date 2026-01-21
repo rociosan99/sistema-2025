@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
+
+class User extends Authenticatable implements FilamentUser
 {
     use HasFactory, Notifiable;
 
@@ -15,7 +18,7 @@ class User extends Authenticatable
         'apellido',
         'email',
         'password',
-        'role',
+        'role', // admin | profesor | alumno
     ];
 
     protected $hidden = [
@@ -31,10 +34,10 @@ class User extends Authenticatable
         ];
     }
 
-    // Roles
-    public function isAdministrador(): bool
+    // Helpers de rol (en base a admin/profesor/alumno)
+    public function isAdmin(): bool
     {
-        return $this->role === 'administrador';
+        return $this->role === 'admin';
     }
 
     public function isProfesor(): bool
@@ -47,7 +50,27 @@ class User extends Authenticatable
         return $this->role === 'alumno';
     }
 
-        public function materias()
+    /**
+     * ✅ Filament: autorización por panel.
+     * Admin → panel admin
+     * Profesor → panel profesor
+     * Alumno → panel alumno
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return match ($panel->getId()) {
+            'admin'    => $this->isAdmin(),
+            'profesor' => $this->isProfesor(),
+            'alumno'   => $this->isAlumno(),
+            default    => false,
+        };
+    }
+
+    /* ==========================
+       RELACIONES (las tuyas)
+       ========================== */
+
+    public function materias()
     {
         return $this->belongsToMany(
             Materia::class,
@@ -59,15 +82,12 @@ class User extends Authenticatable
         )->withPivot('precio_por_hora');
     }
 
-    // Helper opcional: precio que este profesor cobra por hora
-        public function getPrecioPorHoraParaMateria(int $materiaId): ?float
+    public function getPrecioPorHoraParaMateria(int $materiaId): ?float
     {
         $materia = $this->materias()->where('materia_id', $materiaId)->first();
-
         return $materia?->pivot?->precio_por_hora;
     }
 
-    // RELACIÓN TEMAS — CORREGIDA
     public function temas()
     {
         return $this->belongsToMany(
@@ -80,25 +100,16 @@ class User extends Authenticatable
         );
     }
 
-    /**
-     * Disponibilidades semanales del profesor.
-     */
     public function disponibilidades()
     {
         return $this->hasMany(Disponibilidad::class, 'profesor_id', 'id');
     }
 
-    /**
-     * Turnos donde el usuario es ALUMNO.
-     */
     public function turnosComoAlumno()
     {
         return $this->hasMany(Turno::class, 'alumno_id', 'id');
     }
 
-    /**
-     * Turnos donde el usuario es PROFESOR.
-     */
     public function turnosComoProfesor()
     {
         return $this->hasMany(Turno::class, 'profesor_id', 'id');

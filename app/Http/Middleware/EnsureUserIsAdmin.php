@@ -9,25 +9,20 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserIsAdmin
 {
-    /**
-     * Maneja una solicitud entrante.
-     */
     public function handle(Request $request, Closure $next): Response
     {
+        // No autenticado → login
         if (!Auth::check()) {
-            return redirect('/login');
+            return redirect()->route('login');
         }
 
-        $user = Auth::user();
-
-        if ($user->role !== 'administrador') {
-            $redirectPath = match ($user->role) {
-                'profesor' => '/profesor',
-                'alumno'   => '/alumno/dashboard',
-                default    => '/login',
+        // Autenticado pero no admin → redirigir a su panel
+        if (Auth::user()->role !== 'administrador') {
+            return match (Auth::user()->role) {
+                'profesor' => redirect('/profesor'),
+                'alumno'   => redirect('/alumno/dashboard'),
+                default    => redirect()->route('login'),
             };
-
-            return redirect($redirectPath);
         }
 
         return $next($request);

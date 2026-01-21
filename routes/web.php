@@ -1,10 +1,8 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
-use App\Mail\TestMail;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Mail;
 
 /*
 |--------------------------------------------------------------------------
@@ -12,31 +10,29 @@ use Illuminate\Support\Facades\Mail;
 |--------------------------------------------------------------------------
 */
 
-// Página inicial (pública)
 Route::get('/', function () {
-    return view('welcome');
-})->name('home');
+    // Si está logueado, mandalo directo a su panel según role
+    if (Auth::check()) {
+        $role = Auth::user()?->role;
 
-// 🔴 RUTA SOLO PARA PROBAR MAILTRAP (temporal)
-Route::get('/test-mail', function () {
-    Mail::to('alumno@test.com')->send(new TestMail());
-    return 'Mail enviado correctamente (Mailtrap)';
+        return match ($role) {
+            'admin'    => redirect('/admin'),
+            'profesor' => redirect('/profesor'),
+            'alumno'   => redirect('/alumno'),
+            default    => view('welcome'),
+        };
+    }
+
+    // No logueado → welcome
+    return view('welcome');
 });
 
-// Cierre de sesión forzado (opcional)
-Route::get('/force-logout', function () {
-    Auth::logout();
-    session()->invalidate();
-    session()->regenerateToken();
-    return redirect('/login');
-})->name('force.logout');
-
-// Perfil de usuario (accesible para cualquier usuario autenticado)
+// Perfil Breeze (opcional, no interfiere con Filament)
 Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// Filament maneja sus propias rutas (/admin, /profesor, /alumno)
-require __DIR__.'/auth.php';
+// Breeze routes (register/login/logout/etc)
+require __DIR__ . '/auth.php';

@@ -9,22 +9,22 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EnsureUserIsAlumno
 {
-    /**
-     * Maneja una solicitud entrante.
-     */
     public function handle(Request $request, Closure $next): Response
     {
-        // Si no está logueado → al login general
+        // No autenticado → login
         if (!Auth::check()) {
-            return redirect('/login');
+            return redirect()->route('login');
         }
 
-        // Si está logueado pero NO es alumno → 403
+        // Autenticado pero no alumno → redirigir
         if (Auth::user()->role !== 'alumno') {
-            abort(403, 'Acceso denegado. Solo los alumnos pueden ingresar a este panel.');
+            return match (Auth::user()->role) {
+                'administrador' => redirect('/admin'),
+                'profesor'      => redirect('/profesor'),
+                default         => redirect()->route('login'),
+            };
         }
 
-        // Todo OK, sigue la request
         return $next($request);
     }
 }

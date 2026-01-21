@@ -12,7 +12,9 @@ class EditMateria extends EditRecord
     protected function afterSave(): void
     {
         $temas = $this->data['temas'] ?? [];
-        $this->record->temas()->sync($temas);
+
+        // ✅ Sync correcto: relación belongsToMany (materia_tema)
+        $this->record->temasPivot()->sync($temas);
     }
 
     protected function getRedirectUrl(): string

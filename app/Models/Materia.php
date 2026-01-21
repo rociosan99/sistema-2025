@@ -26,7 +26,8 @@ class Materia extends Model
     }
 
     /**
-     * Temas de la materia (a través de los programas)
+     * ✅ Temas de la materia (a través de los programas) - SOLO LECTURA / CONSULTA
+     * ⚠️ NO sirve para sync()
      */
     public function temas()
     {
@@ -34,10 +35,26 @@ class Materia extends Model
             Tema::class,
             Programa::class,
             'programa_materia_id', // FK en Programas → Materia
-            'tema_id',             // PK en Temas
+            'tema_id',             // PK/FK en Temas (ojo: esto depende de tu estructura real)
             'materia_id',          // PK Materia
             'programa_id'          // PK Programa
         )->distinct();
+    }
+
+    /**
+     * ✅ Temas asignados DIRECTAMENTE a la materia (tabla pivot materia_tema)
+     * ✅ ESTA es la relación que soporta sync()
+     */
+    public function temasPivot()
+    {
+        return $this->belongsToMany(
+            Tema::class,
+            'materia_tema',
+            'materia_id',  // FK en pivot → materias
+            'tema_id',     // FK en pivot → temas
+            'materia_id',  // PK materias
+            'tema_id'      // PK temas
+        )->withTimestamps();
     }
 
     /**
