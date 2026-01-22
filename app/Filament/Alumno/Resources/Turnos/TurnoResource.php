@@ -10,6 +10,7 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Filament\Tables\Columns\TextColumn;
 
 class TurnoResource extends Resource
 {
@@ -33,38 +34,53 @@ class TurnoResource extends Resource
     {
         return $table
             ->columns([
-                // 🔹 Estado del turno (pendiente / confirmado / cancelado)
-                \Filament\Tables\Columns\TextColumn::make('estado')
+                TextColumn::make('estado')
                     ->label('Estado')
                     ->badge()
-                    ->formatStateUsing(fn (?string $state) => $state ? ucfirst($state) : '-')
                     ->colors([
                         'warning' => 'pendiente',
-                        'success' => 'confirmado',
-                        'danger'  => 'cancelado',
-                    ]),
+                        'info'    => 'aceptado',
+                        'primary' => 'pendiente_pago',
+                        'success' => 'confirmado', // pago OK
+                        'danger'  => 'rechazado',
+                        'gray'    => 'vencido',
+                    ])
+                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                        'pendiente' => 'Pendiente',
+                        'aceptado' => 'Aceptado (pendiente de pago)',
+                        'pendiente_pago' => 'Pendiente de pago',
+                        'confirmado' => 'Confirmado (pago OK)',
+                        'rechazado' => 'Rechazado',
+                        'cancelado' => 'Cancelado',
+                        'vencido' => 'Vencido',
+                        default => $state ? ucfirst($state) : '-',
+                    }),
 
-                \Filament\Tables\Columns\TextColumn::make('fecha')
+                TextColumn::make('fecha')
                     ->label('Fecha')
                     ->date()
                     ->sortable(),
 
-                \Filament\Tables\Columns\TextColumn::make('hora_inicio')
+                TextColumn::make('hora_inicio')
                     ->label('Desde')
-                    ->time(),
+                    ->formatStateUsing(fn ($state) => $state ? substr((string) $state, 0, 5) : '-'),
 
-                \Filament\Tables\Columns\TextColumn::make('hora_fin')
+                TextColumn::make('hora_fin')
                     ->label('Hasta')
-                    ->time(),
+                    ->formatStateUsing(fn ($state) => $state ? substr((string) $state, 0, 5) : '-'),
 
-                \Filament\Tables\Columns\TextColumn::make('materia.materia_nombre')
-                    ->label('Materia'),
+                TextColumn::make('materia.materia_nombre')
+                    ->label('Materia')
+                    ->placeholder('-'),
 
-                \Filament\Tables\Columns\TextColumn::make('tema.tema_nombre')
-                    ->label('Tema'),
+                // ✅ Tema puede ser null ahora, así que mostramos "-" cuando no exista
+                TextColumn::make('tema.tema_nombre')
+                    ->label('Tema')
+                    ->placeholder('-'),
 
-                \Filament\Tables\Columns\TextColumn::make('profesor.name')
-                    ->label('Profesor'),
+                TextColumn::make('profesor.name')
+                    ->label('Profesor')
+                    ->placeholder('-'),
             ])
             ->defaultSort('fecha', 'asc')
             ->emptyStateHeading('No tenés turnos aún')

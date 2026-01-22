@@ -67,8 +67,13 @@ class SolicitarTurno extends Page
             $this->tema = Tema::find($tema);
         }
 
+        // Si llegás por parámetros materia+tema, armamos texto
         if ($this->materia && $this->tema) {
             $this->busqueda = "{$this->materia->materia_nombre} - {$this->tema->tema_nombre}";
+        } elseif ($this->materia) {
+            $this->busqueda = "{$this->materia->materia_nombre}";
+        } elseif ($this->tema) {
+            $this->busqueda = "{$this->tema->tema_nombre}";
         }
     }
 
@@ -95,11 +100,19 @@ class SolicitarTurno extends Page
             ->toArray();
     }
 
+    /**
+     * ✅ Seleccionó una MATERIA (tema pasa a ser opcional)
+     * Importante: limpiamos tema previo para que no quede “colgado”.
+     */
     public function seleccionarMateria(int $materiaId, string $nombre): void
     {
         $this->materiaId = $materiaId;
         $this->materia = Materia::find($materiaId);
         $this->busqueda = $nombre;
+
+        // ✅ Cambio importante: si elige materia, el tema se limpia.
+        $this->temaId = null;
+        $this->tema = null;
 
         $this->sugerenciasMaterias = [];
         $this->sugerenciasTemas = [];
@@ -114,6 +127,7 @@ class SolicitarTurno extends Page
         $this->sugerenciasMaterias = [];
         $this->sugerenciasTemas = [];
 
+        // Encontrar materia a partir del tema (según tu relación programa_tema → programas)
         $materiaId = DB::table('programa_tema')
             ->join('programas', 'programa_tema.programa_id', '=', 'programas.programa_id')
             ->where('programa_tema.tema_id', $temaId)
@@ -151,6 +165,7 @@ class SolicitarTurno extends Page
             ]);
         }
 
+        // temaId puede ser null (tema opcional)
         $this->slots = $this->slotService
             ->obtenerSlotsPorMateria($this->materiaId, $fecha, $this->temaId)
             ->toArray();
@@ -175,13 +190,14 @@ class SolicitarTurno extends Page
         DB::transaction(function () use ($slot, $alumno) {
 
             // 🔒 VALIDACIÓN DE SOLAPAMIENTO
+            // Bloquean: pendiente / aceptado / pendiente_pago / confirmado
             $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
                 ->whereDate('fecha', $slot['fecha'])
                 ->where(function ($q) use ($slot) {
                     $q->where('hora_inicio', '<', $slot['hora_fin'])
                       ->where('hora_fin', '>', $slot['hora_inicio']);
                 })
-                ->whereIn('estado', ['pendiente', 'confirmado'])
+                ->whereIn('estado', ['pendiente', 'aceptado', 'pendiente_pago', 'confirmado'])
                 ->lockForUpdate()
                 ->exists();
 
@@ -195,7 +211,8 @@ class SolicitarTurno extends Page
                 'alumno_id'       => $alumno->id,
                 'profesor_id'     => $slot['profesor_id'],
                 'materia_id'      => $this->materiaId,
-                'tema_id'         => $this->temaId,
+                // ✅ Cambio clave: si no se eligió tema, guardar null
+                'tema_id'         => $this->temaId ?: null,
                 'fecha'           => $slot['fecha'],
                 'hora_inicio'     => $slot['hora_inicio'],
                 'hora_fin'        => $slot['hora_fin'],
@@ -214,6 +231,7 @@ class SolicitarTurno extends Page
             ->success()
             ->send();
 
+        // refrescar slots para que desaparezca el que reservó
         $this->consultarAhora();
     }
 }

@@ -12,6 +12,15 @@ class Turno extends Model
 
     protected $table = 'turnos';
 
+    // Estados (para no “hardcodear” strings en todos lados)
+    public const ESTADO_PENDIENTE = 'pendiente';
+    public const ESTADO_ACEPTADO = 'aceptado';
+    public const ESTADO_RECHAZADO = 'rechazado';
+    public const ESTADO_PENDIENTE_PAGO = 'pendiente_pago';
+    public const ESTADO_CONFIRMADO = 'confirmado'; // pago OK
+    public const ESTADO_CANCELADO = 'cancelado';
+    public const ESTADO_VENCIDO = 'vencido';
+
     protected $fillable = [
         'alumno_id',
         'profesor_id',
@@ -25,13 +34,11 @@ class Turno extends Model
         'precio_total',
     ];
 
-    /**
-     * Casts automáticos
-     */
     protected $casts = [
         'fecha' => 'date',
-        'hora_inicio' => 'datetime:H:i',
-        'hora_fin' => 'datetime:H:i',
+        // time en DB => mejor string (evita Carbon con fecha inventada)
+        'hora_inicio' => 'string',
+        'hora_fin' => 'string',
         'precio_por_hora' => 'decimal:2',
         'precio_total' => 'decimal:2',
     ];
@@ -40,79 +47,72 @@ class Turno extends Model
      * Relaciones
      * ========================= */
 
-    /**
-     * Alumno que solicitó el turno
-     */
     public function alumno()
     {
         return $this->belongsTo(User::class, 'alumno_id');
     }
 
-    /**
-     * Profesor del turno
-     */
     public function profesor()
     {
         return $this->belongsTo(User::class, 'profesor_id');
     }
 
-    /**
-     * Materia del turno
-     */
     public function materia()
     {
         return $this->belongsTo(Materia::class, 'materia_id', 'materia_id');
     }
 
-    /**
-     * Tema del turno
-     */
     public function tema()
     {
         return $this->belongsTo(Tema::class, 'tema_id', 'tema_id');
     }
 
     /* =========================
-     * Helpers (muy útiles)
+     * Accessors / Helpers
      * ========================= */
 
-    /**
-     * Fecha formateada (para mails y vistas)
-     */
     public function getFechaFormateadaAttribute(): string
     {
         return Carbon::parse($this->fecha)->format('d/m/Y');
     }
 
-    /**
-     * Horario formateado
-     */
     public function getHorarioAttribute(): string
     {
-        return substr($this->hora_inicio, 0, 5) . ' - ' . substr($this->hora_fin, 0, 5);
+        // hora_inicio/hora_fin suelen venir como "HH:MM:SS"
+        $inicio = substr((string) $this->hora_inicio, 0, 5);
+        $fin    = substr((string) $this->hora_fin, 0, 5);
+
+        return "{$inicio} - {$fin}";
     }
 
-    /**
-     * Saber si está pendiente
-     */
     public function estaPendiente(): bool
     {
-        return $this->estado === 'pendiente';
+        return $this->estado === self::ESTADO_PENDIENTE;
     }
 
-    /**
-     * Saber si está confirmado
-     */
+    public function estaAceptado(): bool
+    {
+        return $this->estado === self::ESTADO_ACEPTADO;
+    }
+
+    public function estaPendientePago(): bool
+    {
+        return $this->estado === self::ESTADO_PENDIENTE_PAGO;
+    }
+
+    /** Confirmado = pago aprobado */
     public function estaConfirmado(): bool
     {
-        return $this->estado === 'confirmado';
+        return $this->estado === self::ESTADO_CONFIRMADO;
     }
 
-    /**
-     * Saber si está rechazado
-     */
     public function estaRechazado(): bool
     {
-        return $this->estado === 'rechazado';
+        return $this->estado === self::ESTADO_RECHAZADO;
+    }
+
+    public function estaCancelado(): bool
+    {
+        return $this->estado === self::ESTADO_CANCELADO;
     }
 }

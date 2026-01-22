@@ -2,6 +2,7 @@
 
 namespace App\Filament\Profesor\Resources\Turnos\Tables;
 
+use App\Models\Turno;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
@@ -18,8 +19,6 @@ class TurnosTable
                     ->label('Alumno')
                     ->searchable(),
 
-                // OJO: si tu campo real es materia_nombre, cambiá a:
-                // TextColumn::make('materia.materia_nombre')
                 TextColumn::make('materia.nombre')
                     ->label('Materia'),
 
@@ -28,45 +27,59 @@ class TurnosTable
                     ->date(),
 
                 TextColumn::make('hora_inicio')
-                    ->label('Desde'),
+                    ->label('Desde')
+                    ->formatStateUsing(fn ($state) => substr((string) $state, 0, 5)),
 
                 TextColumn::make('hora_fin')
-                    ->label('Hasta'),
+                    ->label('Hasta')
+                    ->formatStateUsing(fn ($state) => substr((string) $state, 0, 5)),
 
                 TextColumn::make('estado')
                     ->label('Estado')
                     ->badge()
                     ->colors([
-                        'warning' => 'pendiente',
-                        'success' => 'confirmado',
-                        'danger'  => 'rechazado',
-                        'gray'    => 'vencido',
+                        'warning' => Turno::ESTADO_PENDIENTE,
+                        'info'    => Turno::ESTADO_ACEPTADO,
+                        'primary' => Turno::ESTADO_PENDIENTE_PAGO,
+                        'success' => Turno::ESTADO_CONFIRMADO, // pago OK
+                        'danger'  => Turno::ESTADO_RECHAZADO,
+                        'gray'    => Turno::ESTADO_VENCIDO,
                     ])
-                    // Opcional: mostrar "vencido" aunque en BD esté "pendiente"
                     ->formatStateUsing(function ($state, $record) {
-                        if ($state === 'pendiente' && self::estaVencido($record)) {
+                        if ($state === Turno::ESTADO_PENDIENTE && self::estaVencido($record)) {
                             return 'Vencido';
                         }
 
-                        return ucfirst((string) $state);
+                        // Etiquetas amigables
+                        return match ($state) {
+                            Turno::ESTADO_PENDIENTE => 'Pendiente',
+                            Turno::ESTADO_ACEPTADO => 'Aceptado (pendiente de pago)',
+                            Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
+                            Turno::ESTADO_CONFIRMADO => 'Confirmado (pago OK)',
+                            Turno::ESTADO_RECHAZADO => 'Rechazado',
+                            Turno::ESTADO_CANCELADO => 'Cancelado',
+                            Turno::ESTADO_VENCIDO => 'Vencido',
+                            default => ucfirst((string) $state),
+                        };
                     }),
             ])
             ->recordActions([
                 Action::make('confirmar')
-                    ->label('Confirmar')
-                    ->color('success')
+                    ->label('Aceptar')
+                    ->color('info')
                     ->requiresConfirmation()
                     ->visible(fn ($record) =>
-                        $record->estado === 'pendiente' &&
+                        $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
                     ->action(function ($record) {
-                        // seguridad extra: aunque alguien fuerce el click
                         if (self::estaVencido($record)) {
                             return;
                         }
 
-                        $record->update(['estado' => 'confirmado']);
+                        // IMPORTANTE: el profe NO confirma pago.
+                        // Solo acepta la solicitud.
+                        $record->update(['estado' => Turno::ESTADO_ACEPTADO]);
                     }),
 
                 Action::make('rechazar')
@@ -74,7 +87,7 @@ class TurnosTable
                     ->color('danger')
                     ->requiresConfirmation()
                     ->visible(fn ($record) =>
-                        $record->estado === 'pendiente' &&
+                        $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
                     ->action(function ($record) {
@@ -82,40 +95,30 @@ class TurnosTable
                             return;
                         }
 
-                        $record->update(['estado' => 'rechazado']);
+                        $record->update(['estado' => Turno::ESTADO_RECHAZADO]);
                     }),
             ])
             ->paginated();
     }
 
-    /**
-     * ⛔ Determina si el turno está vencido (según fecha + hora_fin)
-     */
     protected static function estaVencido($turno): bool
     {
-        // 1) Fecha base (puede venir como Carbon por el cast 'date')
         $fecha = $turno->fecha instanceof CarbonInterface
             ? $turno->fecha->copy()
             : Carbon::parse($turno->fecha);
 
-        // 2) Hora fin puede venir:
-        // - como Carbon (por tu cast datetime:H:i)
-        // - como string 'HH:MM:SS'
-        // - como string 'YYYY-MM-DD HH:MM:SS'
-        $horaFin = $turno->hora_fin;
+        $horaFinStr = (string) $turno->hora_fin;
 
-        if ($horaFin instanceof CarbonInterface) {
-            $horaFinStr = $horaFin->format('H:i:s');
-        } else {
-            $horaFinStr = (string) $horaFin;
-
-            // Si viene con fecha incluida, extraer solo hora
-            if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaFinStr)) {
-                $horaFinStr = Carbon::parse($horaFinStr)->format('H:i:s');
-            }
+        // Si viene con fecha incluida, extraer solo hora
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaFinStr)) {
+            $horaFinStr = Carbon::parse($horaFinStr)->format('H:i:s');
         }
 
-        // 3) Armar datetime final de fin de turno
+        // Aseguramos HH:MM:SS
+        if (preg_match('/^\d{2}:\d{2}$/', $horaFinStr)) {
+            $horaFinStr .= ':00';
+        }
+
         $finTurno = $fecha->copy()->setTimeFromTimeString($horaFinStr);
 
         return $finTurno->isPast();
