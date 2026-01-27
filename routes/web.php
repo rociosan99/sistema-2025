@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TurnoConfirmacionController;
+use App\Http\Controllers\MercadoPagoController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 
@@ -49,6 +50,26 @@ Route::get('/turnos/{turno}/confirmar-asistencia', [TurnoConfirmacionController:
 Route::get('/turnos/{turno}/cancelar-asistencia', [TurnoConfirmacionController::class, 'cancelar'])
     ->name('turnos.cancelar-asistencia')
     ->middleware('signed');
+
+/*
+|--------------------------------------------------------------------------
+| Mercado Pago (Checkout Pro)
+|--------------------------------------------------------------------------
+| - pagar: lo llamás cuando el turno está 'pendiente_pago'
+| - back_urls: success/failure/pending (vuelve el usuario)
+| - webhook: MP avisa server-to-server (NO lleva auth)
+*/
+Route::get('/turnos/{turno}/pagar', [MercadoPagoController::class, 'pagar'])
+    ->name('mp.pagar');
+
+// Back URLs (vuelve el usuario)
+Route::get('/mp/success/{turno}', [MercadoPagoController::class, 'success'])->name('mp.success');
+Route::get('/mp/failure/{turno}', [MercadoPagoController::class, 'failure'])->name('mp.failure');
+Route::get('/mp/pending/{turno}', [MercadoPagoController::class, 'pending'])->name('mp.pending');
+
+// Webhook (MP llama desde afuera)
+Route::post('/webhooks/mercadopago', [MercadoPagoController::class, 'webhook'])
+    ->name('mp.webhook');
 
 // Breeze routes (register/login/logout/etc)
 require __DIR__ . '/auth.php';

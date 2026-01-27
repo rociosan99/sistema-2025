@@ -115,4 +115,10 @@ class Turno extends Model
     {
         return $this->estado === self::ESTADO_CANCELADO;
     }
+
+    public function pago()
+    {
+        return $this->hasOne(\App\Models\Pago::class, 'turno_id', 'id');
+    }
+
 }

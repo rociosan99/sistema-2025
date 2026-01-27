@@ -10,7 +10,9 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+
 use Filament\Tables\Columns\TextColumn;
+use Filament\Actions\Action;
 
 class TurnoResource extends Resource
 {
@@ -27,9 +29,6 @@ class TurnoResource extends Resource
 
     protected static ?int $navigationSort = 10;
 
-    /**
-     * TABLA — Listado de turnos del alumno.
-     */
     public static function table(Table $table): Table
     {
         return $table
@@ -41,15 +40,15 @@ class TurnoResource extends Resource
                         'warning' => 'pendiente',
                         'info'    => 'aceptado',
                         'primary' => 'pendiente_pago',
-                        'success' => 'confirmado', // pago OK
+                        'success' => 'confirmado',
                         'danger'  => 'rechazado',
                         'gray'    => 'vencido',
                     ])
                     ->formatStateUsing(fn (?string $state) => match ($state) {
                         'pendiente' => 'Pendiente',
-                        'aceptado' => 'Aceptado (pendiente de pago)',
+                        'aceptado' => 'Aceptado (esperando confirmación del alumno)',
                         'pendiente_pago' => 'Pendiente de pago',
-                        'confirmado' => 'Confirmado (pago OK)',
+                        'confirmado' => 'Clase Pagada',
                         'rechazado' => 'Rechazado',
                         'cancelado' => 'Cancelado',
                         'vencido' => 'Vencido',
@@ -73,7 +72,6 @@ class TurnoResource extends Resource
                     ->label('Materia')
                     ->placeholder('-'),
 
-                // ✅ Tema puede ser null ahora, así que mostramos "-" cuando no exista
                 TextColumn::make('tema.tema_nombre')
                     ->label('Tema')
                     ->placeholder('-'),
@@ -82,23 +80,26 @@ class TurnoResource extends Resource
                     ->label('Profesor')
                     ->placeholder('-'),
             ])
+            ->actions([
+                Action::make('pagar')
+                    ->label('Pagar')
+                    ->icon('heroicon-o-credit-card')
+                    ->color('primary')
+                    ->visible(fn (Turno $record) => $record->estado === 'pendiente_pago')
+                    ->url(fn (Turno $record) => route('mp.pagar', ['turno' => $record->id]))
+                    ->openUrlInNewTab(),
+            ])
             ->defaultSort('fecha', 'asc')
             ->emptyStateHeading('No tenés turnos aún')
             ->emptyStateDescription('Solicitá un turno desde el botón "Solicitar turno".');
     }
 
-    /**
-     * Solo mostrar los turnos del alumno logueado.
-     */
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
             ->where('alumno_id', Auth::id());
     }
 
-    /**
-     * SOLO página index (el listado).
-     */
     public static function getPages(): array
     {
         return [

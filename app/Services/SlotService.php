@@ -6,26 +6,17 @@ use App\Models\Disponibilidad;
 use App\Models\Turno;
 use App\Models\User;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class SlotService
 {
-    /**
-     * Obtiene slots disponibles para TODOS los profesores que dictan una materia
-     * en una fecha dada.
-     *
-     * @param  int         $materiaId
-     * @param  Carbon      $fecha
-     * @param  int|null    $temaId    (lo dejamos para futuro)
-     * @return Collection
-     */
     public function obtenerSlotsPorMateria(int $materiaId, Carbon $fecha, ?int $temaId = null): Collection
     {
         $diaSemana = $fecha->dayOfWeekIso; // 1=lunes ... 7=domingo
 
-        // 🟢 1) Buscar IDs de profesores que dictan esa materia
-        //    USANDO la pivot correcta: profesor_materia
+        // 1) IDs de profesores que dictan esa materia
         $profesoresIds = DB::table('profesor_materia')
             ->where('materia_id', $materiaId)
             ->pluck('profesor_id')
@@ -36,7 +27,7 @@ class SlotService
             return collect();
         }
 
-        // 2) Traer datos básicos de esos profesores (podés filtrar por role = 'profesor' si querés)
+        // 2) Profesores
         $profesores = User::query()
             ->whereIn('id', $profesoresIds)
             ->where('role', 'profesor')
@@ -44,13 +35,11 @@ class SlotService
 
         $slots = collect();
 
-        // Duración del turno en minutos (podés moverlo a config/turnos.php)
-        $duracion = config('turnos.duracion_slot', 60);
-        $duracion = (int) ($duracion ?: 60); // por las dudas
+        $duracion = (int) (config('turnos.duracion_slot', 60) ?: 60);
 
         foreach ($profesores as $profesor) {
 
-            // 3) Bloques de disponibilidad para ese profesor y ese día de semana
+            // 3) Disponibilidades del día
             $bloques = Disponibilidad::query()
                 ->where('profesor_id', $profesor->id)
                 ->where('dia_semana', $diaSemana)
@@ -60,14 +49,14 @@ class SlotService
                 continue;
             }
 
-            // 4) Turnos ya reservados para ese profesor en esa fecha
+            // 4) Turnos ocupando horario (IMPORTANTE: incluir aceptado y pendiente_pago)
             $turnos = Turno::query()
                 ->where('profesor_id', $profesor->id)
                 ->whereDate('fecha', $fecha->toDateString())
-                ->whereIn('estado', ['pendiente', 'confirmado'])
-                ->get();
+                ->whereIn('estado', ['pendiente', 'aceptado', 'pendiente_pago', 'confirmado'])
+                ->get(['hora_inicio', 'hora_fin', 'estado']);
 
-            // 5) Generar slots para cada bloque de disponibilidad
+            // 5) Generar slots por bloque
             foreach ($bloques as $bloque) {
                 $horaInicioBloque = $fecha->copy()->setTimeFromTimeString($bloque->hora_inicio);
                 $horaFinBloque    = $fecha->copy()->setTimeFromTimeString($bloque->hora_fin);
@@ -79,9 +68,18 @@ class SlotService
                     $desde = $cursor->format('H:i:s');
                     $hasta = $cursor->copy()->addMinutes($duracion)->format('H:i:s');
 
-                    // Ver si este slot choca con algún turno ya reservado
+                    // 🔒 Ver si este slot choca con algún turno ya reservado
                     $hayChoque = $turnos->contains(function (Turno $t) use ($desde, $hasta) {
-                        return $t->hora_inicio < $hasta && $t->hora_fin > $desde;
+
+                        $inicio = $t->hora_inicio instanceof CarbonInterface
+                            ? $t->hora_inicio->format('H:i:s')
+                            : (string) $t->hora_inicio;
+
+                        $fin = $t->hora_fin instanceof CarbonInterface
+                            ? $t->hora_fin->format('H:i:s')
+                            : (string) $t->hora_fin;
+
+                        return $inicio < $hasta && $fin > $desde;
                     });
 
                     if (! $hayChoque) {
@@ -91,7 +89,7 @@ class SlotService
                             'fecha'            => $fecha->toDateString(),
                             'hora_inicio'      => $desde,
                             'hora_fin'         => $hasta,
-                            'desde'            => substr($desde, 0, 5), // HH:MM
+                            'desde'            => substr($desde, 0, 5),
                             'hasta'            => substr($hasta, 0, 5),
                             'materia_id'       => $materiaId,
                             'tema_id'          => $temaId,
@@ -103,26 +101,19 @@ class SlotService
             }
         }
 
-        // 👉 Hasta acá es EXACTAMENTE la lógica que vos tenías y que funcionaba 👆
-
-        // 🟡 6) Agregar precio_por_hora y precio_total SIN afectar la generación de slots
-
         if ($slots->isEmpty()) {
-            // Si no hay slots, ya está.
             return $slots;
         }
 
-        // Profesores que efectivamente tienen slots
+        // 6) Precios desde pivot
         $profesoresConSlots = $slots->pluck('profesor_id')->unique()->toArray();
 
-        // Traer precios desde la pivot profesor_materia (solo anotamos, no filtramos)
         $preciosPorProfesor = DB::table('profesor_materia')
             ->where('materia_id', $materiaId)
             ->whereIn('profesor_id', $profesoresConSlots)
             ->pluck('precio_por_hora', 'profesor_id')
             ->toArray();
 
-        // Mapear slots agregando precios (si existen)
         $slots = $slots->map(function (array $slot) use ($preciosPorProfesor, $duracion) {
 
             $precioPorHora = $preciosPorProfesor[$slot['profesor_id']] ?? null;
@@ -139,7 +130,6 @@ class SlotService
             return $slot;
         });
 
-        // 7) Ordenar por fecha, profesor y hora inicio (igual que antes)
         return $slots
             ->sortBy([
                 ['fecha', 'asc'],

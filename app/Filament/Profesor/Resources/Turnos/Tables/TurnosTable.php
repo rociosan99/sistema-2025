@@ -55,7 +55,7 @@ class TurnosTable
                             Turno::ESTADO_PENDIENTE => 'Pendiente',
                             Turno::ESTADO_ACEPTADO => 'Aceptado (pendiente de pago)',
                             Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
-                            Turno::ESTADO_CONFIRMADO => 'Confirmado (pago OK)',
+                            Turno::ESTADO_CONFIRMADO => 'Clase Pagada',
                             Turno::ESTADO_RECHAZADO => 'Rechazado',
                             Turno::ESTADO_CANCELADO => 'Cancelado',
                             Turno::ESTADO_VENCIDO => 'Vencido',
