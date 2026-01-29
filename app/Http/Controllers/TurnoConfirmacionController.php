@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\LinkPagoTurno;
 use App\Models\Turno;
+use App\Services\MercadoPagoService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class TurnoConfirmacionController extends Controller
 {
@@ -15,33 +18,40 @@ class TurnoConfirmacionController extends Controller
     {
         $alumnoId = (int) $request->query('alumno_id');
 
-        // alumno_id debe venir en el link
         if (! $alumnoId) {
             abort(403, 'Link inválido.');
         }
 
-        // Debe coincidir con el alumno real del turno
         if ((int) $turno->alumno_id !== $alumnoId) {
             abort(403, 'No autorizado.');
         }
     }
 
-    public function confirmar(Request $request, Turno $turno)
+    public function confirmar(Request $request, Turno $turno, MercadoPagoService $mp)
     {
         $this->validarAlumno($request, $turno);
 
-        if ($turno->estado !== 'aceptado') {
+        if ($turno->estado !== Turno::ESTADO_ACEPTADO) {
             return response()->view('turnos.confirmacion-resultado', [
-                'titulo' => 'No disponible',
+                'titulo'  => 'No disponible',
                 'mensaje' => 'Este turno ya no está disponible para confirmar.',
             ]);
         }
 
-        $turno->update(['estado' => 'pendiente_pago']);
+        // 1) pasa a pendiente_pago
+        $turno->update(['estado' => Turno::ESTADO_PENDIENTE_PAGO]);
+
+        // 2) generar (o reutilizar) link de pago y guardarlo en tabla pagos
+        $pago = $mp->crearLinkDePagoParaTurno($turno);
+
+        // 3) enviar mail con link a Mercado Pago
+        if ($turno->alumno?->email && $pago?->mp_init_point) {
+            Mail::to($turno->alumno->email)->send(new LinkPagoTurno($turno, $pago));
+        }
 
         return response()->view('turnos.confirmacion-resultado', [
-            'titulo' => '¡Listo!',
-            'mensaje' => 'Asistencia confirmada. Turno pendiente de pago.',
+            'titulo'  => '¡Listo!',
+            'mensaje' => 'Asistencia confirmada. Te enviamos un mail con el link para pagar la clase.',
         ]);
     }
 
@@ -49,17 +59,17 @@ class TurnoConfirmacionController extends Controller
     {
         $this->validarAlumno($request, $turno);
 
-        if (! in_array($turno->estado, ['aceptado', 'pendiente_pago'], true)) {
+        if (! in_array($turno->estado, [Turno::ESTADO_ACEPTADO, Turno::ESTADO_PENDIENTE_PAGO], true)) {
             return response()->view('turnos.confirmacion-resultado', [
-                'titulo' => 'No disponible',
+                'titulo'  => 'No disponible',
                 'mensaje' => 'Este turno ya no está disponible para cancelar.',
             ]);
         }
 
-        $turno->update(['estado' => 'cancelado']);
+        $turno->update(['estado' => Turno::ESTADO_CANCELADO]);
 
         return response()->view('turnos.confirmacion-resultado', [
-            'titulo' => 'Cancelado',
+            'titulo'  => 'Cancelado',
             'mensaje' => 'Turno cancelado. Se liberó el horario.',
         ]);
     }

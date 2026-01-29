@@ -19,8 +19,9 @@ class TurnosTable
                     ->label('Alumno')
                     ->searchable(),
 
-                TextColumn::make('materia.nombre')
-                    ->label('Materia'),
+                TextColumn::make('materia.materia_nombre')
+                    ->label('Materia')
+                    ->placeholder('-'),
 
                 TextColumn::make('fecha')
                     ->label('Fecha')

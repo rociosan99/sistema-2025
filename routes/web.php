@@ -8,12 +8,10 @@ use Illuminate\Support\Facades\Auth;
 
 /*
 |--------------------------------------------------------------------------
-| Web Routes
+| Home
 |--------------------------------------------------------------------------
 */
-
 Route::get('/', function () {
-    // Si está logueado, mandalo directo a su panel según role
     if (Auth::check()) {
         $role = Auth::user()?->role;
 
@@ -25,11 +23,14 @@ Route::get('/', function () {
         };
     }
 
-    // No logueado → welcome
     return view('welcome');
 });
 
-// Perfil Breeze (opcional, no interfiere con Filament)
+/*
+|--------------------------------------------------------------------------
+| Perfil (Breeze)
+|--------------------------------------------------------------------------
+*/
 Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -38,10 +39,8 @@ Route::middleware(['auth'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Confirmación de asistencia (links firmados del mail 24h)
+| Confirmación de asistencia (mail 24h) - LINKS FIRMADOS
 |--------------------------------------------------------------------------
-| - middleware('signed') impide que inventen el link
-| - NO lleva auth, así funciona desde el mail aunque no esté logueado
 */
 Route::get('/turnos/{turno}/confirmar-asistencia', [TurnoConfirmacionController::class, 'confirmar'])
     ->name('turnos.confirmar-asistencia')
@@ -55,12 +54,21 @@ Route::get('/turnos/{turno}/cancelar-asistencia', [TurnoConfirmacionController::
 |--------------------------------------------------------------------------
 | Mercado Pago (Checkout Pro)
 |--------------------------------------------------------------------------
-| - pagar: lo llamás cuando el turno está 'pendiente_pago'
-| - back_urls: success/failure/pending (vuelve el usuario)
-| - webhook: MP avisa server-to-server (NO lleva auth)
+| mp.pagar        => botón en panel (logueado)
+| mp.pagar.mail   => link por mail (firmado + alumno_id) (NO requiere login)
+|--------------------------------------------------------------------------
 */
 Route::get('/turnos/{turno}/pagar', [MercadoPagoController::class, 'pagar'])
     ->name('mp.pagar');
+
+Route::get('/turnos/{turno}/pagar-mail', [MercadoPagoController::class, 'pagarDesdeMail'])
+    ->name('mp.pagar.mail')
+    ->middleware('signed');
+
+// ✅ NUEVO: link de pago para el mail (firmado)
+Route::get('/turnos/{turno}/pagar-mail', [MercadoPagoController::class, 'pagarDesdeMail'])
+    ->name('mp.pagar.mail')
+    ->middleware('signed');
 
 // Back URLs (vuelve el usuario)
 Route::get('/mp/success/{turno}', [MercadoPagoController::class, 'success'])->name('mp.success');
@@ -71,5 +79,4 @@ Route::get('/mp/pending/{turno}', [MercadoPagoController::class, 'pending'])->na
 Route::post('/webhooks/mercadopago', [MercadoPagoController::class, 'webhook'])
     ->name('mp.webhook');
 
-// Breeze routes (register/login/logout/etc)
 require __DIR__ . '/auth.php';
