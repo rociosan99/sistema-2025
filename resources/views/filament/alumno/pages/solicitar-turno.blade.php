@@ -1,94 +1,76 @@
 <x-filament-panels::page>
-    <div
-        style="
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        "
-    >
+    <div style="display:flex; flex-direction:column; gap:24px;">
 
         {{-- Encabezado --}}
-        <div
-            style="
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 20px;
-                background-color: #ffffff;
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
-                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-            "
-        >
-            <div style="font-size: 18px; font-weight: 600;">
-                Solicitar un turno de clase particular
+        <div style="
+            border:1px solid #e5e7eb;
+            border-radius:14px;
+            padding:22px;
+            background:linear-gradient(135deg,#eef2ff 0%, #ffffff 55%, #ecfeff 100%);
+            box-shadow:0 10px 24px rgba(15,23,42,.08);
+        ">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                <div style="font-size:18px; font-weight:900; color:#111827;">
+                    Solicitar un turno de clase particular
+                </div>
+
+                <span style="
+                    display:inline-block;
+                    padding:7px 12px;
+                    border-radius:999px;
+                    background:#111827;
+                    color:#fff;
+                    font-size:12px;
+                    font-weight:800;
+                    letter-spacing:.2px;
+                ">
+                    Ordenado por rating ⭐
+                </span>
             </div>
-            <p
-                style="
-                    font-size: 13px;
-                    color: #4b5563;
-                    line-height: 1.6;
-                    margin: 0;
-                "
-            >
+
+            <p style="font-size:13px; color:#374151; line-height:1.7; margin:12px 0 0 0;">
                 Estás solicitando un turno
                 @if($this->materia)
-                    para la materia <span style="font-weight: 600;">{{ $this->materia->materia_nombre }}</span>
+                    para la materia <span style="font-weight:900;">{{ $this->materia->materia_nombre }}</span>
                 @endif
                 @if($this->tema)
-                    — tema: <span style="font-weight: 600;">{{ $this->tema->tema_nombre }}</span>
+                    — tema: <span style="font-weight:900;">{{ $this->tema->tema_nombre }}</span>
                 @endif
-                .
-                Te mostraremos los profesores que dictan esta materia y sus horarios disponibles.
+                . Te mostraremos profesores con horarios disponibles y mejor puntuación primero.
             </p>
         </div>
 
-        {{-- Buscador de materia/tema + fecha --}}
-        <div
-            style="
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 20px;
-                background-color: #ffffff;
-                display: flex;
-                flex-direction: column;
-                gap: 20px;
-                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-            "
-        >
+        {{-- Buscador + fecha --}}
+        <div style="
+            border:1px solid #e5e7eb;
+            border-radius:14px;
+            padding:20px;
+            background:#fff;
+            display:flex;
+            flex-direction:column;
+            gap:18px;
+            box-shadow:0 10px 22px rgba(15,23,42,.06);
+        ">
 
             {{-- Buscador --}}
-            <div
-                style="
-                    display: flex;
-                    flex-direction: column;
-                    gap: 8px;
-                "
-            >
-                <label
-                    style="
-                        font-size: 13px;
-                        font-weight: 500;
-                    "
-                >
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <label style="font-size:13px; font-weight:900; color:#111827;">
                     Buscar materia o tema
                 </label>
 
-                <div
-                    style="
-                        display: flex;
-                        gap: 8px;
-                    "
-                >
-                    <div style="position: relative; flex: 1;">
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <div style="position:relative; flex:1;">
                         <input
                             type="text"
                             style="
-                                width: 100%;
-                                border-radius: 8px;
-                                border: 1px solid #d1d5db;
-                                padding: 8px 32px 8px 10px;
-                                font-size: 14px;
+                                width:100%;
+                                border-radius:12px;
+                                border:1px solid #d1d5db;
+                                padding:11px 44px 11px 14px;
+                                font-size:14px;
+                                outline:none;
+                                background:#ffffff;
+                                box-shadow:0 1px 0 rgba(15,23,42,.04) inset;
                             "
                             placeholder="Ej.: Álgebra, Derivadas, Programación..."
                             wire:model.live="busqueda"
@@ -99,58 +81,61 @@
                             wire:target="consultarAhora"
                             wire:loading.attr="disabled"
                             style="
-                                position: absolute;
-                                top: 0;
-                                right: 0;
-                                height: 100%;
-                                padding-right: 10px;
-                                padding-left: 6px;
-                                border: none;
-                                background: transparent;
-                                display: flex;
-                                align-items: center;
-                                cursor: pointer;
-                                color: #6b7280;
+                                position:absolute;
+                                top:50%;
+                                transform:translateY(-50%);
+                                right:10px;
+                                width:34px;
+                                height:34px;
+                                border-radius:10px;
+                                border:1px solid #e5e7eb;
+                                background:#f9fafb;
+                                display:flex;
+                                align-items:center;
+                                justify-content:center;
+                                cursor:pointer;
+                                color:#374151;
                             "
+                            title="Buscar"
+                            onmouseover="this.style.backgroundColor='#eef2ff'"
+                            onmouseout="this.style.backgroundColor='#f9fafb'"
                         >
-                            <x-heroicon-o-magnifying-glass style="width: 20px; height: 20px;" />
+                            <x-heroicon-o-magnifying-glass style="width:18px; height:18px;" />
                         </button>
                     </div>
                 </div>
 
-                {{-- Sugerencias (autocompletar) --}}
+                {{-- Sugerencias --}}
                 @if(!empty($sugerenciasMaterias) || !empty($sugerenciasTemas))
-                    <div
-                        style="
-                            margin-top: 8px;
-                            background-color: #ffffff;
-                            border: 1px solid #e5e7eb;
-                            border-radius: 8px;
-                            padding: 6px;
-                            font-size: 13px;
-                            display: flex;
-                            flex-direction: column;
-                            gap: 4px;
-                            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
-                        "
-                    >
+                    <div style="
+                        margin-top:8px;
+                        background:#ffffff;
+                        border:1px solid #e5e7eb;
+                        border-radius:12px;
+                        padding:8px;
+                        font-size:13px;
+                        display:flex;
+                        flex-direction:column;
+                        gap:6px;
+                        box-shadow:0 14px 28px rgba(15,23,42,.14);
+                    ">
                         @foreach($sugerenciasMaterias as $m)
                             <button
                                 type="button"
                                 style="
-                                    width: 100%;
-                                    text-align: left;
-                                    padding: 4px 6px;
-                                    border-radius: 6px;
-                                    border: none;
-                                    background: transparent;
-                                    cursor: pointer;
+                                    width:100%;
+                                    text-align:left;
+                                    padding:10px 12px;
+                                    border-radius:10px;
+                                    border:1px solid #eef2ff;
+                                    background:linear-gradient(135deg,#eef2ff 0%, #ffffff 70%);
+                                    cursor:pointer;
                                 "
-                                onmouseover="this.style.backgroundColor='#f3f4f6'"
-                                onmouseout="this.style.backgroundColor='transparent'"
+                                onmouseover="this.style.filter='brightness(0.98)'"
+                                onmouseout="this.style.filter='none'"
                                 wire:click="seleccionarMateria({{ $m['materia_id'] }}, '{{ addslashes($m['materia_nombre']) }}')"
                             >
-                                📘 Materia: {{ $m['materia_nombre'] }}
+                                📘 <strong>Materia:</strong> {{ $m['materia_nombre'] }}
                             </button>
                         @endforeach
 
@@ -158,19 +143,19 @@
                             <button
                                 type="button"
                                 style="
-                                    width: 100%;
-                                    text-align: left;
-                                    padding: 4px 6px;
-                                    border-radius: 6px;
-                                    border: none;
-                                    background: transparent;
-                                    cursor: pointer;
+                                    width:100%;
+                                    text-align:left;
+                                    padding:10px 12px;
+                                    border-radius:10px;
+                                    border:1px solid #ecfeff;
+                                    background:linear-gradient(135deg,#ecfeff 0%, #ffffff 70%);
+                                    cursor:pointer;
                                 "
-                                onmouseover="this.style.backgroundColor='#f3f4f6'"
-                                onmouseout="this.style.backgroundColor='transparent'"
+                                onmouseover="this.style.filter='brightness(0.98)'"
+                                onmouseout="this.style.filter='none'"
                                 wire:click="seleccionarTema({{ $t['tema_id'] }}, '{{ addslashes($t['tema_nombre']) }}')"
                             >
-                                🧩 Tema: {{ $t['tema_nombre'] }}
+                                🧩 <strong>Tema:</strong> {{ $t['tema_nombre'] }}
                             </button>
                         @endforeach
                     </div>
@@ -178,49 +163,38 @@
             </div>
 
             {{-- Fecha --}}
-            <div
-                style="
-                    display: flex;
-                    flex-direction: column;
-                    gap: 6px;
-                    padding-top: 12px;
-                    border-top: 1px solid #f3f4f6;
-                "
-            >
-                <label
-                    style="
-                        font-size: 13px;
-                        font-weight: 500;
-                    "
-                >
+            <div style="
+                display:flex;
+                flex-direction:column;
+                gap:8px;
+                padding-top:14px;
+                border-top:1px solid #f3f4f6;
+            ">
+                <label style="font-size:13px; font-weight:900; color:#111827;">
                     Fecha de la clase
                 </label>
+
                 <input
                     type="date"
                     style="
-                        width: 260px;
-                        max-width: 100%;
-                        border-radius: 8px;
-                        border: 1px solid #d1d5db;
-                        padding: 6px 10px;
-                        font-size: 14px;
+                        width:260px;
+                        max-width:100%;
+                        border-radius:12px;
+                        border:1px solid #d1d5db;
+                        padding:10px 12px;
+                        font-size:14px;
+                        background:#fff;
                     "
                     wire:model.live="fecha"
                 >
-                <p
-                    style="
-                        font-size: 11px;
-                        color: #6b7280;
-                        margin: 4px 0 0 0;
-                        line-height: 1.5;
-                    "
-                >
-                    Seleccioná el día en el que querés consultar los horarios disponibles.
+
+                <p style="font-size:11px; color:#6b7280; margin:0; line-height:1.6;">
+                    Seleccioná el día para consultar horarios disponibles.
                 </p>
             </div>
 
-            {{-- Botón "Consultar ahora" --}}
-            <div style="padding-top: 8px;">
+            {{-- Botón Consultar --}}
+            <div style="padding-top:4px;">
                 <x-filament::button
                     color="primary"
                     wire:click="consultarAhora"
@@ -231,199 +205,222 @@
                     <span wire:loading.remove wire:target="consultarAhora">Consultar ahora</span>
                     <span wire:loading wire:target="consultarAhora">Buscando…</span>
                 </x-filament::button>
-                <span
-                    style="
-                        font-size: 11px;
-                        color: #6b7280;
-                        margin-left: 6px;
-                    "
-                >
-                    Te mostraremos los horarios disponibles para la materia/tema elegido.
-                </span>
             </div>
         </div>
 
-        {{-- Resultado: slots en cards --}}
+        {{-- Resultado --}}
         @if($fecha)
-            <div
-                style="
-                    border: 1px solid #e5e7eb;
-                    border-radius: 12px;
-                    overflow: hidden;
-                    background-color: #f9fafb;
-                    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-                "
-            >
-                <div
-                    style="
-                        padding: 12px 20px;
-                        background-color: #f3f4f6;
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between;
-                    "
-                >
-                    <h3
-                        style="
-                            font-size: 15px;
-                            font-weight: 600;
-                            margin: 0;
-                        "
-                    >
-                        Turnos disponibles
-                        <span
-                            style="
-                                font-size: 13px;
-                                font-weight: 400;
-                                opacity: 0.7;
-                            "
-                        >
-                            — {{ \Carbon\Carbon::parse($fecha)->isoFormat('dddd D [de] MMMM YYYY') }}
-                        </span>
-                    </h3>
-                    <span
-                        style="
-                            font-size: 13px;
-                            opacity: 0.7;
-                        "
-                    >
+            <div style="
+                border:1px solid #e5e7eb;
+                border-radius:14px;
+                overflow:hidden;
+                background:#ffffff;
+                box-shadow:0 10px 22px rgba(15,23,42,.06);
+            ">
+                <div style="
+                    padding:14px 20px;
+                    background:linear-gradient(135deg,#111827 0%, #1d4ed8 50%, #0ea5e9 100%);
+                    color:#fff;
+                    display:flex;
+                    align-items:center;
+                    justify-content:space-between;
+                    gap:12px;
+                ">
+                    <div>
+                        <div style="font-size:15px; font-weight:900; margin:0;">
+                            Turnos disponibles
+                        </div>
+                        <div style="font-size:12px; opacity:.9; margin-top:2px;">
+                            {{ \Carbon\Carbon::parse($fecha)->isoFormat('dddd D [de] MMMM YYYY') }}
+                        </div>
+                    </div>
+
+                    <div style="
+                        display:inline-block;
+                        padding:7px 10px;
+                        border-radius:999px;
+                        background:rgba(255,255,255,.15);
+                        font-size:12px;
+                        font-weight:800;
+                    ">
                         {{ count($slots) }} resultado(s)
-                    </span>
+                    </div>
                 </div>
 
-                <div style="padding: 20px;">
+                <div style="padding:20px;">
                     @php
                         $fechaSel = \Carbon\Carbon::parse($fecha ?? now());
                         $esPasado = $fechaSel->isPast() && !$fechaSel->isToday();
                         $esHoy    = $fechaSel->isToday();
-                        $leadEdge = now()->addMinutes(30)->format('H:i'); // margen de 30 min
+                        $leadEdge = now()->addMinutes(30)->format('H:i');
                     @endphp
 
                     @if($esPasado)
-                        <div
-                            style="
-                                font-size: 13px;
-                                color: #b91c1c;
-                            "
-                        >
+                        <div style="
+                            border:1px solid #fecaca;
+                            background:#fef2f2;
+                            color:#991b1b;
+                            padding:12px 14px;
+                            border-radius:12px;
+                            font-size:13px;
+                            font-weight:700;
+                        ">
                             No podés reservar en fechas pasadas.
                         </div>
+
                     @elseif(empty($slots))
-                        <p
-                            style="
-                                font-size: 13px;
-                                color: #6b7280;
-                                margin: 0;
-                            "
-                        >
-                            No hay horarios disponibles para esta materia en la fecha seleccionada.
-                        </p>
+                        <div style="
+                            border:1px solid #e5e7eb;
+                            background:#f9fafb;
+                            padding:14px;
+                            border-radius:12px;
+                            color:#6b7280;
+                            font-size:13px;
+                        ">
+                            No hay horarios disponibles para esta materia/tema en la fecha seleccionada.
+                        </div>
+
                     @else
-                        {{-- GRID de cards --}}
-                        <div
-                            style="
-                                display: grid;
-                                grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-                                gap: 18px;
-                            "
-                        >
+                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px;">
                             @foreach($slots as $i => $s)
                                 @php
                                     $disabled = $esPasado || ($esHoy && ($s['desde'] < $leadEdge));
+                                    $avg = (float)($s['rating_avg'] ?? 0);
+                                    $cnt = (int)($s['rating_count'] ?? 0);
+
+                                    // dibujar estrellas
+                                    $filled = (int) floor($avg);
+                                    $half = ($avg - $filled) >= 0.5;
+                                    $stars = '';
+                                    for ($k=1; $k<=5; $k++) {
+                                        if ($k <= $filled) $stars .= '★';
+                                        elseif ($half && $k == $filled+1) $stars .= '★';
+                                        else $stars .= '☆';
+                                    }
+
+                                    // badges
+                                    $badgeTop = ($avg >= 4.7 && $cnt >= 3);         // “Top” solo si tiene buen promedio y varias reseñas
+                                    $badgeNuevo = ($cnt > 0 && $cnt < 3);            // tiene pocas
+                                    $badgeSin = ($cnt === 0);                        // sin reseñas
+
+                                    // color según rating
+                                    $chipBg = $avg >= 4.5 ? '#dcfce7' : ($avg >= 4.0 ? '#fef9c3' : '#fee2e2');
+                                    $chipTx = $avg >= 4.5 ? '#166534' : ($avg >= 4.0 ? '#854d0e' : '#991b1b');
                                 @endphp
 
-                                <div
-                                    style="
-                                        border: 1px solid #e5e7eb;
-                                        border-radius: 12px;
-                                        padding: 14px;
-                                        background-color: #ffffff;
-                                        display: flex;
-                                        flex-direction: column;
-                                        justify-content: space-between;
-                                        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-                                    "
-                                >
-                                    <div
-                                        style="
-                                            display: flex;
-                                            flex-direction: column;
-                                            gap: 4px;
-                                            font-size: 13px;
-                                            line-height: 1.5;
-                                        "
-                                    >
-                                        <div
-                                            style="
-                                                font-weight: 600;
-                                                font-size: 14px;
-                                                color: #111827;
-                                            "
-                                        >
-                                            {{ $s['desde'] }} – {{ $s['hasta'] }}
-                                        </div>
-
-                                        <div
-                                            style="
-                                                font-size: 12px;
-                                                opacity: 0.75;
-                                            "
-                                        >
-                                            Profesor: {{ $s['profesor_nombre'] ?? 'Profesor' }}
-                                        </div>
-
-                                        @if($this->materia)
-                                            <div
-                                                style="
-                                                    font-size: 12px;
-                                                    opacity: 0.75;
-                                                "
-                                            >
-                                                Materia: {{ $this->materia->materia_nombre }}
+                                <div style="
+                                    border:1px solid #e5e7eb;
+                                    border-radius:16px;
+                                    padding:16px;
+                                    background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%);
+                                    box-shadow:0 16px 30px rgba(15,23,42,.10);
+                                ">
+                                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+                                        <div style="flex:1;">
+                                            <div style="font-weight:900; font-size:16px; color:#111827;">
+                                                {{ $s['desde'] }} – {{ $s['hasta'] }}
                                             </div>
-                                        @endif
 
-                                        @if($this->tema)
-                                            <div
-                                                style="
-                                                    font-size: 12px;
-                                                    opacity: 0.75;
-                                                "
-                                            >
-                                                Tema: {{ $this->tema->tema_nombre }}
+                                            <div style="margin-top:6px; font-size:13px; color:#374151;">
+                                                <span style="font-weight:900;">{{ $s['profesor_nombre'] ?? 'Profesor' }}</span>
                                             </div>
-                                        @endif
 
-                                        {{-- 💰 Precios --}}
-                                        @if(!empty($s['precio_por_hora']))
-                                            <div
-                                                style="
-                                                    font-size: 12px;
-                                                    margin-top: 4px;
-                                                "
-                                            >
-                                                Precio por hora:
-                                                <span style="font-weight: 600;">
-                                                    ${{ number_format((float) $s['precio_por_hora'], 0, ',', '.') }}
+                                            <div style="margin-top:10px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                                <span style="
+                                                    display:inline-block;
+                                                    padding:7px 10px;
+                                                    border-radius:999px;
+                                                    background:{{ $chipBg }};
+                                                    color:{{ $chipTx }};
+                                                    font-size:12px;
+                                                    font-weight:900;
+                                                ">
+                                                    {{ $stars }}
+                                                    <span style="margin-left:6px;">
+                                                        {{ $avg > 0 ? number_format($avg, 1, ',', '.') : '—' }}
+                                                    </span>
+                                                </span>
+
+                                                <span style="font-size:12px; color:#6b7280;">
+                                                    ({{ $cnt }} calificación{{ $cnt === 1 ? '' : 'es' }})
                                                 </span>
                                             </div>
-                                        @endif
 
-                                        @if(!empty($s['precio_total']))
-                                            <div
-                                                style="
-                                                    font-size: 12px;
-                                                "
-                                            >
-                                                Precio de este turno:
-                                                <span style="font-weight: 600;">
-                                                    ${{ number_format((float) $s['precio_total'], 0, ',', '.') }}
+                                            {{-- Materia / tema --}}
+                                            @if($this->materia)
+                                                <div style="margin-top:10px; font-size:12px; color:#6b7280;">
+                                                    📘 {{ $this->materia->materia_nombre }}
+                                                </div>
+                                            @endif
+                                            @if($this->tema)
+                                                <div style="margin-top:4px; font-size:12px; color:#6b7280;">
+                                                    🧩 {{ $this->tema->tema_nombre }}
+                                                </div>
+                                            @endif
+
+                                            {{-- Precios --}}
+                                            @if(!empty($s['precio_por_hora']))
+                                                <div style="margin-top:12px; font-size:12px; color:#111827;">
+                                                    <span style="opacity:.75;">Precio por hora:</span>
+                                                    <span style="font-weight:900;">
+                                                        ${{ number_format((float) $s['precio_por_hora'], 0, ',', '.') }}
+                                                    </span>
+                                                </div>
+                                            @endif
+
+                                            @if(!empty($s['precio_total']))
+                                                <div style="margin-top:2px; font-size:12px; color:#111827;">
+                                                    <span style="opacity:.75;">Precio del turno:</span>
+                                                    <span style="font-weight:900;">
+                                                        ${{ number_format((float) $s['precio_total'], 0, ',', '.') }}
+                                                    </span>
+                                                </div>
+                                            @endif
+                                        </div>
+
+                                        {{-- Badges a la derecha --}}
+                                        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:120px;">
+                                            @if($badgeTop)
+                                                <span style="
+                                                    display:inline-block;
+                                                    padding:7px 10px;
+                                                    border-radius:12px;
+                                                    background:linear-gradient(135deg,#f59e0b 0%, #f97316 100%);
+                                                    color:#fff;
+                                                    font-size:12px;
+                                                    font-weight:900;
+                                                ">
+                                                    🏆 TOP
                                                 </span>
-                                            </div>
-                                        @endif
+                                            @elseif($badgeNuevo)
+                                                <span style="
+                                                    display:inline-block;
+                                                    padding:7px 10px;
+                                                    border-radius:12px;
+                                                    background:#e0f2fe;
+                                                    color:#075985;
+                                                    font-size:12px;
+                                                    font-weight:900;
+                                                ">
+                                                    ✨ NUEVO
+                                                </span>
+                                            @elseif($badgeSin)
+                                                <span style="
+                                                    display:inline-block;
+                                                    padding:7px 10px;
+                                                    border-radius:12px;
+                                                    background:#f3f4f6;
+                                                    color:#374151;
+                                                    font-size:12px;
+                                                    font-weight:900;
+                                                ">
+                                                    Sin reseñas
+                                                </span>
+                                            @endif
+                                        </div>
                                     </div>
 
-                                    <div style="margin-top: 12px;">
+                                    <div style="margin-top:14px;">
                                         <x-filament::button
                                             size="sm"
                                             class="w-full"
@@ -435,6 +432,12 @@
                                             <span wire:loading.remove wire:target="reservar({{ $i }})">Reservar</span>
                                             <span wire:loading wire:target="reservar({{ $i }})">Reservando…</span>
                                         </x-filament::button>
+
+                                        @if($disabled)
+                                            <div style="margin-top:8px; font-size:11px; color:#9ca3af;">
+                                                No disponible (horario pasado o demasiado cerca).
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             @endforeach
@@ -443,5 +446,6 @@
                 </div>
             </div>
         @endif
+
     </div>
 </x-filament-panels::page>

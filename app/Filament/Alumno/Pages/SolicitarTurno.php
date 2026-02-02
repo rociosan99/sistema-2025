@@ -40,7 +40,7 @@ class SolicitarTurno extends Page
     // 🔹 Fecha
     public ?string $fecha = null;
 
-    // 🔹 Slots
+    // 🔹 Slots (acá viene TODO lo que se muestra en el blade)
     public array $slots = [];
 
     protected SlotService $slotService;
@@ -159,6 +159,10 @@ class SolicitarTurno extends Page
             ]);
         }
 
+        // ✅ IMPORTANTE:
+        // El SlotService ahora devuelve los slots:
+        // - con rating_avg y rating_count
+        // - ordenados por mejor calificación (tipo Uber)
         $this->slots = $this->slotService
             ->obtenerSlotsPorMateria($this->materiaId, $fecha, $this->temaId)
             ->toArray();
@@ -187,7 +191,7 @@ class SolicitarTurno extends Page
                 ->whereDate('fecha', $slot['fecha'])
                 ->where(function ($q) use ($slot) {
                     $q->where('hora_inicio', '<', $slot['hora_fin'])
-                      ->where('hora_fin', '>', $slot['hora_inicio']);
+                        ->where('hora_fin', '>', $slot['hora_inicio']);
                 })
                 ->whereIn('estado', ['pendiente', 'aceptado', 'pendiente_pago', 'confirmado'])
                 ->lockForUpdate()
@@ -212,7 +216,6 @@ class SolicitarTurno extends Page
                 'precio_total'    => $slot['precio_total'] ?? null,
             ]);
 
-            // por si alguna relación no estaba cargada aún
             $turno->loadMissing(['profesor']);
 
             Mail::to($turno->profesor->email)

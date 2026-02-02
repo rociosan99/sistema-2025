@@ -20,7 +20,7 @@ class MercadoPagoController extends Controller
     public function pagar(Turno $turno, MercadoPagoService $mp)
     {
         // ✅ DEBUG (dejalo 1 vez y después BORRALO)
-        dd(substr((string) config('services.mercadopago.access_token'), 0, 8)); // TEST- o APP_USR-
+        //dd(substr((string) config('services.mercadopago.access_token'), 0, 8)); // TEST- o APP_USR-
 
         // Si ya está pagado
         if ($turno->estado === Turno::ESTADO_CONFIRMADO) {

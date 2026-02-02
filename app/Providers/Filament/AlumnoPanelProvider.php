@@ -2,14 +2,13 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Alumno\Pages\Dashboard; // ✅ ESTE ES EL IMPORT CORRECTO
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -31,7 +30,9 @@ class AlumnoPanelProvider extends PanelProvider
             ->brandName('Portal Alumnos')
             ->discoverResources(in: app_path('Filament/Alumno/Resources'), for: 'App\\Filament\\Alumno\\Resources')
             ->discoverPages(in: app_path('Filament/Alumno/Pages'), for: 'App\\Filament\\Alumno\\Pages')
-            ->pages([Dashboard::class])
+            ->pages([
+                Dashboard::class, // ✅ tu dashboard custom con lógica de calificaciones
+            ])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

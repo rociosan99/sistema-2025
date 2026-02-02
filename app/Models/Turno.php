@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Carbon\Carbon;
 
 class Turno extends Model
 {
@@ -12,7 +12,7 @@ class Turno extends Model
 
     protected $table = 'turnos';
 
-    // Estados (para no “hardcodear” strings en todos lados)
+    // Estados
     public const ESTADO_PENDIENTE = 'pendiente';
     public const ESTADO_ACEPTADO = 'aceptado';
     public const ESTADO_RECHAZADO = 'rechazado';
@@ -36,7 +36,6 @@ class Turno extends Model
 
     protected $casts = [
         'fecha' => 'date',
-        // time en DB => mejor string (evita Carbon con fecha inventada)
         'hora_inicio' => 'string',
         'hora_fin' => 'string',
         'precio_por_hora' => 'decimal:2',
@@ -67,6 +66,16 @@ class Turno extends Model
         return $this->belongsTo(Tema::class, 'tema_id', 'tema_id');
     }
 
+    public function pago()
+    {
+        return $this->hasOne(Pago::class, 'turno_id', 'id');
+    }
+
+    public function calificacionProfesor()
+    {
+        return $this->hasOne(CalificacionProfesor::class, 'turno_id', 'id');
+    }
+
     /* =========================
      * Accessors / Helpers
      * ========================= */
@@ -78,7 +87,6 @@ class Turno extends Model
 
     public function getHorarioAttribute(): string
     {
-        // hora_inicio/hora_fin suelen venir como "HH:MM:SS"
         $inicio = substr((string) $this->hora_inicio, 0, 5);
         $fin    = substr((string) $this->hora_fin, 0, 5);
 
@@ -100,7 +108,6 @@ class Turno extends Model
         return $this->estado === self::ESTADO_PENDIENTE_PAGO;
     }
 
-    /** Confirmado = pago aprobado */
     public function estaConfirmado(): bool
     {
         return $this->estado === self::ESTADO_CONFIRMADO;
@@ -116,9 +123,11 @@ class Turno extends Model
         return $this->estado === self::ESTADO_CANCELADO;
     }
 
-    public function pago()
+    /**
+     * Devuelve un Carbon con fecha + hora_fin del turno.
+     */
+    public function finDateTime(): Carbon
     {
-        return $this->hasOne(\App\Models\Pago::class, 'turno_id', 'id');
+        return Carbon::parse($this->fecha->format('Y-m-d') . ' ' . $this->hora_fin);
     }
-
 }

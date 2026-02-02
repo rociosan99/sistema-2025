@@ -2,12 +2,11 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 
 class User extends Authenticatable implements FilamentUser
 {
@@ -67,7 +66,7 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /* ==========================
-       RELACIONES (las tuyas)
+       RELACIONES
        ========================== */
 
     public function materias()
@@ -113,5 +112,21 @@ class User extends Authenticatable implements FilamentUser
     public function turnosComoProfesor()
     {
         return $this->hasMany(Turno::class, 'profesor_id', 'id');
+    }
+
+    /**
+     * ✅ Calificaciones que HIZO el usuario (cuando es alumno).
+     */
+    public function calificacionesHechas()
+    {
+        return $this->hasMany(CalificacionProfesor::class, 'alumno_id', 'id');
+    }
+
+    /**
+     * ✅ Calificaciones que RECIBE el usuario (cuando es profesor).
+     */
+    public function calificacionesRecibidasComoProfesor()
+    {
+        return $this->hasMany(CalificacionProfesor::class, 'profesor_id', 'id');
     }
 }
