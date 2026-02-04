@@ -17,11 +17,21 @@ class Pago extends Model
     public const ESTADO_ERROR     = 'error';
 
     protected $fillable = [
-        'turno_id','monto','moneda','estado','provider',
-        'mp_preference_id','mp_init_point',
-        'mp_payment_id','mp_status','mp_status_detail',
-        'mp_payment_type','mp_payment_method',
-        'external_reference','detalle_externo','fecha_aprobado',
+        'turno_id',
+        'monto',
+        'moneda',
+        'estado',
+        'provider',
+        'mp_preference_id',
+        'mp_init_point',
+        'mp_payment_id',
+        'mp_status',
+        'mp_status_detail',
+        'mp_payment_type',
+        'mp_payment_method',
+        'external_reference',
+        'detalle_externo',
+        'fecha_aprobado',
     ];
 
     protected $casts = [
@@ -32,6 +42,11 @@ class Pago extends Model
 
     public function turno()
     {
-        return $this->belongsTo(\App\Models\Turno::class, 'turno_id', 'id');
+        return $this->belongsTo(Turno::class, 'turno_id', 'id');
+    }
+
+    public function estaAprobado(): bool
+    {
+        return $this->estado === self::ESTADO_APROBADO;
     }
 }

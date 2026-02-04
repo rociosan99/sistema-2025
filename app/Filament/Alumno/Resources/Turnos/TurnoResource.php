@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
 use Filament\Tables\Columns\TextColumn;
-use Filament\Actions\Action;
+use Filament\Tables\Columns\ViewColumn;
 
 class TurnoResource extends Resource
 {
@@ -37,21 +37,21 @@ class TurnoResource extends Resource
                     ->label('Estado')
                     ->badge()
                     ->colors([
-                        'warning' => 'pendiente',
-                        'info'    => 'aceptado',
-                        'primary' => 'pendiente_pago',
-                        'success' => 'confirmado',
-                        'danger'  => 'rechazado',
-                        'gray'    => 'vencido',
+                        'warning' => Turno::ESTADO_PENDIENTE,
+                        'info'    => Turno::ESTADO_ACEPTADO,
+                        'primary' => Turno::ESTADO_PENDIENTE_PAGO,
+                        'success' => Turno::ESTADO_CONFIRMADO,
+                        'danger'  => Turno::ESTADO_RECHAZADO,
+                        'gray'    => Turno::ESTADO_VENCIDO,
                     ])
                     ->formatStateUsing(fn (?string $state) => match ($state) {
-                        'pendiente' => 'Pendiente',
-                        'aceptado' => 'Aceptado (esperando confirmación del alumno)',
-                        'pendiente_pago' => 'Pendiente de pago',
-                        'confirmado' => 'Clase Pagada',
-                        'rechazado' => 'Rechazado',
-                        'cancelado' => 'Cancelado',
-                        'vencido' => 'Vencido',
+                        Turno::ESTADO_PENDIENTE => 'Pendiente',
+                        Turno::ESTADO_ACEPTADO => 'Aceptado',
+                        Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
+                        Turno::ESTADO_CONFIRMADO => 'Clase pagada',
+                        Turno::ESTADO_RECHAZADO => 'Rechazado',
+                        Turno::ESTADO_CANCELADO => 'Cancelado',
+                        Turno::ESTADO_VENCIDO => 'Vencido',
                         default => $state ? ucfirst($state) : '-',
                     }),
 
@@ -79,15 +79,11 @@ class TurnoResource extends Resource
                 TextColumn::make('profesor.name')
                     ->label('Profesor')
                     ->placeholder('-'),
-            ])
-            ->actions([
-                Action::make('pagar')
-                    ->label('Pagar')
-                    ->icon('heroicon-o-credit-card')
-                    ->color('primary')
-                    ->visible(fn (Turno $record) => $record->estado === 'pendiente_pago')
-                    ->url(fn (Turno $record) => route('mp.pagar', ['turno' => $record->id]))
-                    ->openUrlInNewTab(),
+
+                // ✅ COLUMNA CON BOTONES (SIN Tables\Actions\Action)
+                ViewColumn::make('acciones')
+                    ->label('Acciones')
+                    ->view('filament.alumno.turnos.acciones'),
             ])
             ->defaultSort('fecha', 'asc')
             ->emptyStateHeading('No tenés turnos aún')

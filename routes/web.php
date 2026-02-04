@@ -1,15 +1,15 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\TurnoConfirmacionController;
 use App\Http\Controllers\MercadoPagoController;
+use App\Http\Controllers\TurnoCancelarPanelController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Home
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 Route::get('/', function () {
     if (Auth::check()) {
@@ -27,9 +27,9 @@ Route::get('/', function () {
 });
 
 /*
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 | Perfil (Breeze)
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
 */
 Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -38,25 +38,9 @@ Route::middleware(['auth'])->group(function () {
 });
 
 /*
-|--------------------------------------------------------------------------
-| Confirmación de asistencia (mail 24h) - LINKS FIRMADOS
-|--------------------------------------------------------------------------
-*/
-Route::get('/turnos/{turno}/confirmar-asistencia', [TurnoConfirmacionController::class, 'confirmar'])
-    ->name('turnos.confirmar-asistencia')
-    ->middleware('signed');
-
-Route::get('/turnos/{turno}/cancelar-asistencia', [TurnoConfirmacionController::class, 'cancelar'])
-    ->name('turnos.cancelar-asistencia')
-    ->middleware('signed');
-
-/*
-|--------------------------------------------------------------------------
-| Mercado Pago (Checkout Pro)
-|--------------------------------------------------------------------------
-| mp.pagar        => botón en panel (logueado)
-| mp.pagar.mail   => link por mail (firmado + alumno_id) (NO requiere login)
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
+| Mercado Pago
+|--------------------------------------------------------------------------|
 */
 Route::get('/turnos/{turno}/pagar', [MercadoPagoController::class, 'pagar'])
     ->name('mp.pagar');
@@ -65,18 +49,23 @@ Route::get('/turnos/{turno}/pagar-mail', [MercadoPagoController::class, 'pagarDe
     ->name('mp.pagar.mail')
     ->middleware('signed');
 
-// ✅ NUEVO: link de pago para el mail (firmado)
-Route::get('/turnos/{turno}/pagar-mail', [MercadoPagoController::class, 'pagarDesdeMail'])
-    ->name('mp.pagar.mail')
-    ->middleware('signed');
-
-// Back URLs (vuelve el usuario)
+// Back URLs
 Route::get('/mp/success/{turno}', [MercadoPagoController::class, 'success'])->name('mp.success');
 Route::get('/mp/failure/{turno}', [MercadoPagoController::class, 'failure'])->name('mp.failure');
 Route::get('/mp/pending/{turno}', [MercadoPagoController::class, 'pending'])->name('mp.pending');
 
-// Webhook (MP llama desde afuera)
+// Webhook
 Route::post('/webhooks/mercadopago', [MercadoPagoController::class, 'webhook'])
     ->name('mp.webhook');
+
+/*
+|--------------------------------------------------------------------------|
+| Alumno: Cancelar turno desde el panel (logueado)
+|--------------------------------------------------------------------------|
+*/
+Route::middleware(['auth'])->group(function () {
+    Route::post('/turnos/{turno}/cancelar-panel', TurnoCancelarPanelController::class)
+        ->name('turnos.cancelar-panel');
+});
 
 require __DIR__ . '/auth.php';

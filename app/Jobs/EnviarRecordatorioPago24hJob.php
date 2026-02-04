@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
 
@@ -20,29 +21,41 @@ class EnviarRecordatorioPago24hJob implements ShouldQueue
 
     public function handle(): void
     {
-        $mañana = Carbon::tomorrow()->toDateString();
+        // Ventana: turnos cuyo inicio está entre 24h y 24h+1min (porque corre cada minuto)
+        $desde = Carbon::now()->addHours(24);
+        $hasta = Carbon::now()->addHours(24)->addMinute();
 
+        // Turnos que deberían pagar (pendiente_pago) y están cerca de 24h
         $turnos = Turno::query()
             ->with(['alumno', 'profesor', 'materia', 'pago'])
-            ->whereDate('fecha', $mañana)
             ->where('estado', Turno::ESTADO_PENDIENTE_PAGO)
-            ->get();
+            ->get()
+            ->filter(function (Turno $turno) use ($desde, $hasta) {
+                // inicio del turno
+                $inicio = Carbon::parse($turno->fecha->format('Y-m-d') . ' ' . $turno->hora_inicio);
+                return $inicio->betweenIncluded($desde, $hasta);
+            });
 
         foreach ($turnos as $turno) {
-            // si no hay pago, lo tratamos como pendiente
+
+            // Si ya venció, no mandar nada
+            if ($turno->finDateTime()->isPast()) {
+                continue;
+            }
+
             $pago = $turno->pago;
 
-            // ya pagado => no recordatorio
+            // Si ya pagó, no mandar
             if ($pago && $pago->estado === Pago::ESTADO_APROBADO) {
                 continue;
             }
 
-            // evitar duplicado
+            // Evitar duplicado (si ya enviaste recordatorio)
             if ($pago && $pago->recordatorio_pago_enviado_at) {
                 continue;
             }
 
-            // link firmado para el mail
+            // Link firmado para pagar desde mail (sin login)
             $urlPago = URL::signedRoute('mp.pagar.mail', [
                 'turno' => $turno->id,
                 'alumno_id' => $turno->alumno_id,
@@ -52,12 +65,12 @@ class EnviarRecordatorioPago24hJob implements ShouldQueue
                 new RecordatorioPagoTurno($turno, $urlPago)
             );
 
-            // marcar recordatorio enviado (si no existe pago, lo creamos mínimo)
+            // Si no existía pago, lo creo mínimo para guardar la marca de recordatorio
             if (! $pago) {
                 $pago = Pago::create([
                     'turno_id' => $turno->id,
                     'monto' => $turno->precio_total,
-                    'moneda' => 'ARS',
+                    'moneda' => config('services.mercadopago.currency', 'ARS'),
                     'estado' => Pago::ESTADO_PENDIENTE,
                     'provider' => 'mercadopago',
                     'external_reference' => "turno:{$turno->id}",
