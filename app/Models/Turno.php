@@ -150,4 +150,10 @@ class Turno extends Model
 
         return $this->finDateTime()->isPast();
     }
+
+    public function calificacionAlumno()
+    {
+        return $this->hasOne(\App\Models\CalificacionAlumno::class, 'turno_id', 'id');
+    }
+
 }

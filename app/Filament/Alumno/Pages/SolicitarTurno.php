@@ -3,6 +3,8 @@
 namespace App\Filament\Alumno\Pages;
 
 use App\Mail\TurnoSolicitado;
+use App\Models\Carrera;
+use App\Models\Institucion;
 use App\Models\Materia;
 use App\Models\Tema;
 use App\Models\Turno;
@@ -23,6 +25,14 @@ class SolicitarTurno extends Page
     protected static ?string $navigationLabel = 'Solicitar turno';
     protected string $view = 'filament.alumno.pages.solicitar-turno';
 
+    // ✅ NUEVO: Institución/Carrera
+    public ?int $institucionId = null;
+    public ?int $carreraId = null;
+
+    // ✅ NUEVO: options para selects
+    public array $institucionesOptions = [];
+    public array $carrerasOptions = [];
+
     // 🔹 Contexto
     public ?int $profesorId = null;
     public ?int $materiaId  = null;
@@ -40,7 +50,7 @@ class SolicitarTurno extends Page
     // 🔹 Fecha
     public ?string $fecha = null;
 
-    // 🔹 Slots (acá viene TODO lo que se muestra en el blade)
+    // 🔹 Slots
     public array $slots = [];
 
     protected SlotService $slotService;
@@ -74,10 +84,65 @@ class SolicitarTurno extends Page
         } elseif ($this->tema) {
             $this->busqueda = "{$this->tema->tema_nombre}";
         }
+
+        // ✅ cargar instituciones
+        $this->institucionesOptions = Institucion::query()
+            ->orderBy('institucion_nombre')
+            ->pluck('institucion_nombre', 'institucion_id')
+            ->toArray();
+
+        // si ya hay institución, cargar carreras
+        if ($this->institucionId) {
+            $this->carrerasOptions = Carrera::query()
+                ->where('carrera_institucion_id', $this->institucionId)
+                ->orderBy('carrera_nombre')
+                ->pluck('carrera_nombre', 'carrera_id')
+                ->toArray();
+        }
+    }
+
+    // ✅ Cascada institución -> carreras + reset
+    public function updatedInstitucionId($value): void
+    {
+        $this->carreraId = null;
+        $this->carrerasOptions = [];
+
+        if ($value) {
+            $this->carrerasOptions = Carrera::query()
+                ->where('carrera_institucion_id', (int) $value)
+                ->orderBy('carrera_nombre')
+                ->pluck('carrera_nombre', 'carrera_id')
+                ->toArray();
+        }
+
+        // Reset para no mezclar contexto
+        $this->materiaId = null;
+        $this->materia = null;
+        $this->temaId = null;
+        $this->tema = null;
+
+        $this->busqueda = null;
+        $this->sugerenciasMaterias = [];
+        $this->sugerenciasTemas = [];
+        $this->slots = [];
+    }
+
+    public function updatedCarreraId($value): void
+    {
+        // Reset materia/tema/busqueda al cambiar carrera
+        $this->materiaId = null;
+        $this->materia = null;
+        $this->temaId = null;
+        $this->tema = null;
+
+        $this->busqueda = null;
+        $this->sugerenciasMaterias = [];
+        $this->sugerenciasTemas = [];
+        $this->slots = [];
     }
 
     /* =========================
-       🔍 BUSCADOR (NO TOCAR)
+       🔍 BUSCADOR (filtrado por carrera vía PlanEstudio -> Programas)
        ========================= */
 
     public function updatedBusqueda(string $value): void
@@ -88,14 +153,35 @@ class SolicitarTurno extends Page
             return;
         }
 
-        $this->sugerenciasMaterias = Materia::where('materia_nombre', 'like', "%$value%")
+        if (! $this->carreraId) {
+            $this->sugerenciasMaterias = [];
+            $this->sugerenciasTemas = [];
+            return;
+        }
+
+        // ✅ Materias de la carrera (Plan -> Programas)
+        $this->sugerenciasMaterias = Materia::query()
+            ->join('programas', 'programas.programa_materia_id', '=', 'materias.materia_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
+            ->where('planes_estudio.plan_carrera_id', $this->carreraId)
+            ->where('materias.materia_nombre', 'like', "%{$value}%")
+            ->select('materias.materia_id', 'materias.materia_nombre')
+            ->distinct()
             ->limit(5)
-            ->get(['materia_id', 'materia_nombre'])
+            ->get()
             ->toArray();
 
-        $this->sugerenciasTemas = Tema::where('tema_nombre', 'like', "%$value%")
+        // ✅ Temas de la carrera (ProgramaTema -> Programas -> Plan)
+        $this->sugerenciasTemas = Tema::query()
+            ->join('programa_tema', 'programa_tema.tema_id', '=', 'temas.tema_id')
+            ->join('programas', 'programas.programa_id', '=', 'programa_tema.programa_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
+            ->where('planes_estudio.plan_carrera_id', $this->carreraId)
+            ->where('temas.tema_nombre', 'like', "%{$value}%")
+            ->select('temas.tema_id', 'temas.tema_nombre')
+            ->distinct()
             ->limit(5)
-            ->get(['tema_id', 'tema_nombre'])
+            ->get()
             ->toArray();
     }
 
@@ -105,7 +191,7 @@ class SolicitarTurno extends Page
         $this->materia = Materia::find($materiaId);
         $this->busqueda = $nombre;
 
-        // ✅ si elige materia, el tema se limpia.
+        // ✅ si elige materia, el tema se limpia
         $this->temaId = null;
         $this->tema = null;
 
@@ -122,13 +208,20 @@ class SolicitarTurno extends Page
         $this->sugerenciasMaterias = [];
         $this->sugerenciasTemas = [];
 
+        if (! $this->carreraId) {
+            return;
+        }
+
+        // ✅ Buscar materia del tema dentro de esa carrera (por Plan -> Programas)
         $materiaId = DB::table('programa_tema')
             ->join('programas', 'programa_tema.programa_id', '=', 'programas.programa_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
             ->where('programa_tema.tema_id', $temaId)
+            ->where('planes_estudio.plan_carrera_id', $this->carreraId)
             ->value('programas.programa_materia_id');
 
         if ($materiaId) {
-            $this->materiaId = $materiaId;
+            $this->materiaId = (int) $materiaId;
             $this->materia = Materia::find($materiaId);
         }
     }
@@ -139,6 +232,19 @@ class SolicitarTurno extends Page
 
     public function consultarAhora(): void
     {
+        // ✅ Validar contexto
+        if (! $this->institucionId) {
+            throw ValidationException::withMessages([
+                'institucionId' => 'Seleccioná una institución.',
+            ]);
+        }
+
+        if (! $this->carreraId) {
+            throw ValidationException::withMessages([
+                'carreraId' => 'Seleccioná una carrera.',
+            ]);
+        }
+
         if (! $this->fecha) {
             throw ValidationException::withMessages([
                 'fecha' => 'Seleccioná una fecha.',
@@ -159,17 +265,13 @@ class SolicitarTurno extends Page
             ]);
         }
 
-        // ✅ IMPORTANTE:
-        // El SlotService ahora devuelve los slots:
-        // - con rating_avg y rating_count
-        // - ordenados por mejor calificación (tipo Uber)
         $this->slots = $this->slotService
             ->obtenerSlotsPorMateria($this->materiaId, $fecha, $this->temaId)
             ->toArray();
     }
 
     /* =========================
-       RESERVAR TURNO (VALIDADO)
+       RESERVAR TURNO (NO TOCAR)
        ========================= */
 
     public function reservar(int $index): void
@@ -186,7 +288,6 @@ class SolicitarTurno extends Page
 
         DB::transaction(function () use ($slot, $alumno) {
 
-            // 🔒 VALIDACIÓN DE SOLAPAMIENTO (por PROFESOR, no importa la materia)
             $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
                 ->whereDate('fecha', $slot['fecha'])
                 ->where(function ($q) use ($slot) {
@@ -211,7 +312,7 @@ class SolicitarTurno extends Page
                 'fecha'           => $slot['fecha'],
                 'hora_inicio'     => $slot['hora_inicio'],
                 'hora_fin'        => $slot['hora_fin'],
-                'estado'          => 'pendiente', // ✅ siempre pendiente al reservar
+                'estado'          => 'pendiente',
                 'precio_por_hora' => $slot['precio_por_hora'] ?? null,
                 'precio_total'    => $slot['precio_total'] ?? null,
             ]);
@@ -228,7 +329,6 @@ class SolicitarTurno extends Page
             ->success()
             ->send();
 
-        // refrescar slots para que desaparezca el que reservó
         $this->consultarAhora();
     }
 }

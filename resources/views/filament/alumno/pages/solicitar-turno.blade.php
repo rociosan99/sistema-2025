@@ -52,6 +52,64 @@
             box-shadow:0 10px 22px rgba(15,23,42,.06);
         ">
 
+            {{-- Institución + Carrera --}}
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+
+                <div style="display:flex; flex-direction:column; gap:8px; min-width:260px; flex:1;">
+                    <label style="font-size:13px; font-weight:900; color:#111827;">
+                        Institución
+                    </label>
+
+                    <select
+                        wire:model.live="institucionId"
+                        style="
+                            width:100%;
+                            border-radius:12px;
+                            border:1px solid #d1d5db;
+                            padding:10px 12px;
+                            font-size:14px;
+                            background:#fff;
+                        "
+                    >
+                        <option value="">Seleccioná una institución…</option>
+                        @foreach($institucionesOptions as $id => $nombre)
+                            <option value="{{ $id }}">{{ $nombre }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:8px; min-width:260px; flex:1;">
+                    <label style="font-size:13px; font-weight:900; color:#111827;">
+                        Carrera
+                    </label>
+
+                    <select
+                        wire:model.live="carreraId"
+                        @disabled(empty($carrerasOptions))
+                        style="
+                            width:100%;
+                            border-radius:12px;
+                            border:1px solid #d1d5db;
+                            padding:10px 12px;
+                            font-size:14px;
+                            background:#fff;
+                        "
+                    >
+                        <option value="">Seleccioná una carrera…</option>
+                        @foreach($carrerasOptions as $id => $nombre)
+                            <option value="{{ $id }}">{{ $nombre }}</option>
+                        @endforeach
+                    </select>
+
+                    @if(empty($carrerasOptions) && $this->institucionId)
+                        <p style="font-size:11px; color:#6b7280; margin:0;">
+                            Esta institución no tiene carreras cargadas.
+                        </p>
+                    @endif
+                </div>
+
+            </div>
+
             {{-- Buscador --}}
             <div style="display:flex; flex-direction:column; gap:8px;">
                 <label style="font-size:13px; font-weight:900; color:#111827;">
@@ -104,6 +162,22 @@
                         </button>
                     </div>
                 </div>
+
+                {{-- Mensaje si escribe y no eligió carrera --}}
+                @if(mb_strlen($busqueda ?? '') >= 2 && !$this->carreraId)
+                    <div style="
+                        margin-top:8px;
+                        border:1px solid #fde68a;
+                        background:#fffbeb;
+                        color:#92400e;
+                        padding:10px 12px;
+                        border-radius:12px;
+                        font-size:13px;
+                        font-weight:700;
+                    ">
+                        Elegí una carrera para poder buscar materias y temas.
+                    </div>
+                @endif
 
                 {{-- Sugerencias --}}
                 @if(!empty($sugerenciasMaterias) || !empty($sugerenciasTemas))
@@ -281,6 +355,7 @@
                         </div>
 
                     @else
+                        {{-- (tu bloque de cards de slots sigue igual, sin cambios) --}}
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px;">
                             @foreach($slots as $i => $s)
                                 @php
@@ -288,7 +363,6 @@
                                     $avg = (float)($s['rating_avg'] ?? 0);
                                     $cnt = (int)($s['rating_count'] ?? 0);
 
-                                    // dibujar estrellas
                                     $filled = (int) floor($avg);
                                     $half = ($avg - $filled) >= 0.5;
                                     $stars = '';
@@ -298,12 +372,10 @@
                                         else $stars .= '☆';
                                     }
 
-                                    // badges
-                                    $badgeTop = ($avg >= 4.7 && $cnt >= 3);         // “Top” solo si tiene buen promedio y varias reseñas
-                                    $badgeNuevo = ($cnt > 0 && $cnt < 3);            // tiene pocas
-                                    $badgeSin = ($cnt === 0);                        // sin reseñas
+                                    $badgeTop = ($avg >= 4.7 && $cnt >= 3);
+                                    $badgeNuevo = ($cnt > 0 && $cnt < 3);
+                                    $badgeSin = ($cnt === 0);
 
-                                    // color según rating
                                     $chipBg = $avg >= 4.5 ? '#dcfce7' : ($avg >= 4.0 ? '#fef9c3' : '#fee2e2');
                                     $chipTx = $avg >= 4.5 ? '#166534' : ($avg >= 4.0 ? '#854d0e' : '#991b1b');
                                 @endphp
@@ -346,7 +418,6 @@
                                                 </span>
                                             </div>
 
-                                            {{-- Materia / tema --}}
                                             @if($this->materia)
                                                 <div style="margin-top:10px; font-size:12px; color:#6b7280;">
                                                     📘 {{ $this->materia->materia_nombre }}
@@ -358,7 +429,6 @@
                                                 </div>
                                             @endif
 
-                                            {{-- Precios --}}
                                             @if(!empty($s['precio_por_hora']))
                                                 <div style="margin-top:12px; font-size:12px; color:#111827;">
                                                     <span style="opacity:.75;">Precio por hora:</span>
@@ -378,7 +448,6 @@
                                             @endif
                                         </div>
 
-                                        {{-- Badges a la derecha --}}
                                         <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:120px;">
                                             @if($badgeTop)
                                                 <span style="
