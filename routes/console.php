@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Schedule;
 use App\Jobs\EnviarRecordatorioPago24hJob;
 use App\Jobs\MarcarTurnosVencidosJob;
 
+use App\Jobs\ProcesarSolicitudesDisponibilidadJob;
+use App\Jobs\ExpirarOfertasSolicitudJob;
+
+
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
@@ -25,3 +29,6 @@ Schedule::job(new MarcarTurnosVencidosJob())
 
 Schedule::job(new EnviarRecordatorioPago24hJob())
     ->everyMinute();
+
+Schedule::job(new ProcesarSolicitudesDisponibilidadJob)->everyFiveMinutes();
+Schedule::job(new ExpirarOfertasSolicitudJob)->everyMinute();
