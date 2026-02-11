@@ -4,7 +4,7 @@
             <div>
                 <div style="font-weight:900; font-size:16px; color:#111827;">Ofertas de alumnos</div>
                 <div style="margin-top:6px; font-size:13px; color:#6b7280;">
-                    Cuando aceptás una oferta, se crea el turno en <strong>pendiente_pago</strong>.
+                    Aceptar crea un turno en <strong>pendiente_pago</strong>.
                 </div>
             </div>
             <x-filament::button size="sm" wire:click="cargar" icon="heroicon-o-arrow-path">

@@ -4,8 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+// ✅ Spatie Activitylog
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
+
 class OfertaSolicitud extends Model
 {
+    // ✅ Auditoría automática
+    use LogsActivity;
+
     protected $table = 'ofertas_solicitud';
 
     public const ESTADO_PENDIENTE = 'pendiente';
@@ -16,22 +23,39 @@ class OfertaSolicitud extends Model
     protected $fillable = [
         'solicitud_id',
         'profesor_id',
-
-        // ✅ tramo ofrecido (match parcial)
         'hora_inicio',
         'hora_fin',
-
         'estado',
         'expires_at',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
-
-        // opcional: te quedan como string, que es lo más seguro con time
-        'hora_inicio' => 'string',
-        'hora_fin'    => 'string',
     ];
+
+    /* =========================
+     * ✅ Auditoría (Spatie)
+     * ========================= */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('audit')
+            ->logOnly([
+                'solicitud_id',
+                'profesor_id',
+                'hora_inicio',
+                'hora_fin',
+                'estado',
+                'expires_at',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function getDescriptionForEvent(string $eventName): string
+    {
+        return "oferta_solicitud_{$eventName}";
+    }
 
     public function solicitud()
     {

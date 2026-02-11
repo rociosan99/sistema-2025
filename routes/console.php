@@ -6,29 +6,32 @@ use Illuminate\Support\Facades\Schedule;
 
 use App\Jobs\EnviarRecordatorioPago24hJob;
 use App\Jobs\MarcarTurnosVencidosJob;
-
 use App\Jobs\ProcesarSolicitudesDisponibilidadJob;
 use App\Jobs\ExpirarOfertasSolicitudJob;
-
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-/*
-|--------------------------------------------------------------------------
-| Scheduler (Flujo A)
-|--------------------------------------------------------------------------
-| 1) Marcar turnos vencidos (para no permitir pagar/cancelar fuera de tiempo)
-| 2) Recordatorio de pago 24h antes si NO pagó
-|--------------------------------------------------------------------------
-*/
-
+/**
+ * Flujo A
+ * - Marcar turnos vencidos
+ * - Recordatorio pago 24h antes
+ */
 Schedule::job(new MarcarTurnosVencidosJob())
     ->everyMinute();
 
 Schedule::job(new EnviarRecordatorioPago24hJob())
     ->everyMinute();
 
-Schedule::job(new ProcesarSolicitudesDisponibilidadJob)->everyFiveMinutes();
-Schedule::job(new ExpirarOfertasSolicitudJob)->everyMinute();
+/**
+ * Matching solicitudes -> genera ofertas
+ */
+Schedule::job(new ProcesarSolicitudesDisponibilidadJob())
+    ->everyMinute();
+
+/**
+ * Expira ofertas pendientes vencidas
+ */
+Schedule::job(new ExpirarOfertasSolicitudJob())
+    ->everyMinute();

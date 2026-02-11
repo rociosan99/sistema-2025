@@ -18,13 +18,13 @@
             </div>
         </div>
 
-        {{-- Debug --}}
-        <div style="border:1px dashed #d1d5db; border-radius:14px; padding:12px; background:#f9fafb; font-size:13px;">
+        {{-- Debug (oculto) --}}
+        <div style="display:none;">
             <div>
                 <strong>Debug:</strong>
                 Turnos en rango = {{ $this->debugTotalTurnosEnRango }},
                 Materias distintas = {{ $this->debugMateriasDistintas }},
-                Temas distintos = {{ $this->debugTemasDistintos }}
+                Temas distintas = {{ $this->debugTemasDistintos }}
             </div>
 
             <div style="margin-top:8px;">
@@ -90,7 +90,7 @@
                 Turnos por Materia (Top 10 por solicitudes)
             </div>
 
-            {{-- Data para JS (sin @json dentro del script) --}}
+            {{-- Data para JS --}}
             <div
                 id="chartDataMaterias"
                 data-labels='@json($this->materiasChartLabels)'
@@ -188,13 +188,8 @@
             let labels = [];
             let values = [];
 
-            try {
-                labels = JSON.parse(el.dataset.labels || '[]');
-            } catch (e) { labels = []; }
-
-            try {
-                values = JSON.parse(el.dataset.values || '[]');
-            } catch (e) { values = []; }
+            try { labels = JSON.parse(el.dataset.labels || '[]'); } catch (e) { labels = []; }
+            try { values = JSON.parse(el.dataset.values || '[]'); } catch (e) { values = []; }
 
             return { labels, values };
         }

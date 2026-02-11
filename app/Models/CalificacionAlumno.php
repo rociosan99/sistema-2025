@@ -4,8 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+// ✅ Spatie Activitylog
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
+
 class CalificacionAlumno extends Model
 {
+    // ✅ Auditoría automática
+    use LogsActivity;
+
     protected $table = 'calificaciones_alumno';
 
     protected $fillable = [
@@ -19,6 +26,30 @@ class CalificacionAlumno extends Model
     protected $casts = [
         'estrellas' => 'integer',
     ];
+
+    /* =========================
+     * ✅ Auditoría (Spatie)
+     * ========================= */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('audit')
+            ->logOnly([
+                'turno_id',
+                'profesor_id',
+                'alumno_id',
+                'estrellas',
+                // Si preferís NO guardar comentario por privacidad, borrá esta línea:
+                'comentario',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function getDescriptionForEvent(string $eventName): string
+    {
+        return "calificacion_alumno_{$eventName}";
+    }
 
     public function turno()
     {

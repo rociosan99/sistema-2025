@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
 class SolicitudesDisponibilidad extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-bell-alert';
-    protected static ?string $navigationLabel = 'Solicitudes (alertas)';
+    protected static ?string $navigationLabel = 'Disponibilidad';
     protected static ?string $title = 'Solicitudes de disponibilidad';
     protected static ?string $slug = 'solicitudes-disponibilidad';
 

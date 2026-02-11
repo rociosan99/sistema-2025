@@ -19,7 +19,7 @@ class Estadisticas extends Page
     public ?string $fechaInicio = null;
     public ?string $fechaFin    = null;
 
-    // Debug
+    // Debug (se mantiene por si querés usarlo, pero NO se muestra en la vista)
     public int $debugTotalTurnosEnRango = 0;
     public int $debugMateriasDistintas = 0;
     public int $debugTemasDistintos = 0;
@@ -72,7 +72,7 @@ class Estadisticas extends Page
         $desde = $this->fechaInicio;
         $hasta = $this->fechaFin;
 
-        // Debug base
+        // Debug base (no visible en UI)
         $this->debugTotalTurnosEnRango = (int) DB::table('turnos')
             ->whereBetween('fecha', [$desde, $hasta])
             ->count();
@@ -105,18 +105,21 @@ class Estadisticas extends Page
         $this->materiasChartLabels = $topMaterias->pluck('materia')->values()->all();
         $this->materiasChartSolicitados = $topMaterias->pluck('solicitados')->map(fn ($v) => (int) $v)->values()->all();
 
-        // 2) Temas (incluye “Sin tema”)
+        /**
+         * ✅ 2) Temas (en vez de "Sin tema", usamos "Temas de {Materia}")
+         */
         $temas = DB::table('turnos as t')
+            ->join('materias as m', 'm.materia_id', '=', 't.materia_id')
             ->leftJoin('temas as te', 'te.tema_id', '=', 't.tema_id')
             ->selectRaw("
-                COALESCE(te.tema_nombre, 'Sin tema') as tema,
+                COALESCE(te.tema_nombre, CONCAT('Temas de ', m.materia_nombre)) as tema,
                 COUNT(*) as solicitados,
                 SUM(CASE WHEN t.estado = 'confirmado' THEN 1 ELSE 0 END) as pagados,
                 SUM(CASE WHEN t.estado = 'cancelado' THEN 1 ELSE 0 END) as cancelados,
                 SUM(CASE WHEN t.estado = 'vencido' THEN 1 ELSE 0 END) as vencidos
             ")
             ->whereBetween('t.fecha', [$desde, $hasta])
-            ->groupBy(DB::raw("COALESCE(te.tema_nombre, 'Sin tema')"))
+            ->groupBy(DB::raw("COALESCE(te.tema_nombre, CONCAT('Temas de ', m.materia_nombre))"))
             ->orderByDesc('solicitados')
             ->get();
 

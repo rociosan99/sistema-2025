@@ -6,9 +6,16 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+// ✅ Spatie Activitylog
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
+
 class Turno extends Model
 {
     use HasFactory;
+
+    // ✅ Auditoría automática
+    use LogsActivity;
 
     protected $table = 'turnos';
 
@@ -50,6 +57,36 @@ class Turno extends Model
     ];
 
     /* =========================
+     * ✅ Auditoría (Spatie)
+     * ========================= */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('audit')
+            ->logOnly([
+                'alumno_id',
+                'profesor_id',
+                'materia_id',
+                'tema_id',
+                'fecha',
+                'hora_inicio',
+                'hora_fin',
+                'estado',
+                'precio_por_hora',
+                'precio_total',
+                'asistencia_confirmada_at',
+                'asistencia_cancelada_at',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function getDescriptionForEvent(string $eventName): string
+    {
+        return "turno_{$eventName}";
+    }
+
+    /* =========================
      * Relaciones
      * ========================= */
 
@@ -81,6 +118,11 @@ class Turno extends Model
     public function calificacionProfesor()
     {
         return $this->hasOne(CalificacionProfesor::class, 'turno_id', 'id');
+    }
+
+    public function calificacionAlumno()
+    {
+        return $this->hasOne(\App\Models\CalificacionAlumno::class, 'turno_id', 'id');
     }
 
     /* =========================
@@ -150,10 +192,4 @@ class Turno extends Model
 
         return $this->finDateTime()->isPast();
     }
-
-    public function calificacionAlumno()
-    {
-        return $this->hasOne(\App\Models\CalificacionAlumno::class, 'turno_id', 'id');
-    }
-
 }

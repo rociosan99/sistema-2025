@@ -4,8 +4,15 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+// ✅ Spatie Activitylog
+use Spatie\Activitylog\Traits\LogsActivity;
+use Spatie\Activitylog\LogOptions;
+
 class Pago extends Model
 {
+    // ✅ Auditoría automática
+    use LogsActivity;
+
     protected $table = 'pagos';
     protected $primaryKey = 'pago_id';
     public $incrementing = true;
@@ -39,6 +46,38 @@ class Pago extends Model
         'monto' => 'decimal:2',
         'fecha_aprobado' => 'datetime',
     ];
+
+    /* =========================
+     * ✅ Auditoría (Spatie)
+     * ========================= */
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('audit')
+            ->logOnly([
+                'turno_id',
+                'monto',
+                'moneda',
+                'estado',
+                'provider',
+                'mp_preference_id',
+                'mp_init_point',
+                'mp_payment_id',
+                'mp_status',
+                'mp_status_detail',
+                'mp_payment_type',
+                'mp_payment_method',
+                'external_reference',
+                'fecha_aprobado',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function getDescriptionForEvent(string $eventName): string
+    {
+        return "pago_{$eventName}";
+    }
 
     public function turno()
     {
