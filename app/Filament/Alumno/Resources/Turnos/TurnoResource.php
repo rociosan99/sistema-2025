@@ -80,7 +80,6 @@ class TurnoResource extends Resource
                     ->label('Profesor')
                     ->placeholder('-'),
 
-                // ✅ COLUMNA CON BOTONES (SIN Tables\Actions\Action)
                 ViewColumn::make('acciones')
                     ->label('Acciones')
                     ->view('filament.alumno.turnos.acciones'),

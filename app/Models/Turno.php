@@ -13,15 +13,13 @@ use Spatie\Activitylog\LogOptions;
 class Turno extends Model
 {
     use HasFactory;
-
-    // ✅ Auditoría automática
-    use LogsActivity;
+    use LogsActivity; // ✅ Auditoría automática
 
     protected $table = 'turnos';
 
     // Estados
     public const ESTADO_PENDIENTE       = 'pendiente';
-    public const ESTADO_ACEPTADO        = 'aceptado'; // (legacy) ya no se usa en Flujo A
+    public const ESTADO_ACEPTADO        = 'aceptado'; // legacy
     public const ESTADO_RECHAZADO       = 'rechazado';
     public const ESTADO_PENDIENTE_PAGO  = 'pendiente_pago';
     public const ESTADO_CONFIRMADO      = 'confirmado'; // pago OK
@@ -40,7 +38,7 @@ class Turno extends Model
         'precio_por_hora',
         'precio_total',
 
-        // legacy (no usado en Flujo A, pero lo dejamos por compatibilidad)
+        // legacy
         'asistencia_confirmada_at',
         'asistencia_cancelada_at',
     ];
@@ -142,7 +140,11 @@ class Turno extends Model
         return "{$inicio} - {$fin}";
     }
 
-    public function estaPendiente(): bool { return $this->estado === self::ESTADO_PENDIENTE; }
+    public function estaPendiente(): bool
+    {
+        return $this->estado === self::ESTADO_PENDIENTE;
+    }
+
     public function estaPendientePago(): bool { return $this->estado === self::ESTADO_PENDIENTE_PAGO; }
     public function estaConfirmado(): bool { return $this->estado === self::ESTADO_CONFIRMADO; }
     public function estaRechazado(): bool { return $this->estado === self::ESTADO_RECHAZADO; }
@@ -150,8 +152,29 @@ class Turno extends Model
     public function estaVencido(): bool { return $this->estado === self::ESTADO_VENCIDO; }
 
     /**
-     * ✅ Devuelve Carbon con fecha + hora_fin del turno (robusto).
-     * Acepta hora_fin como "19:00", "19:00:00" o "2026-01-22 19:00:00"
+     * ✅ Fecha+hora_inicio
+     */
+    public function inicioDateTime(): Carbon
+    {
+        $fechaStr = $this->fecha instanceof Carbon
+            ? $this->fecha->format('Y-m-d')
+            : Carbon::parse($this->fecha)->format('Y-m-d');
+
+        $horaInicioStr = (string) ($this->hora_inicio ?? '00:00:00');
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaInicioStr)) {
+            $horaInicioStr = Carbon::parse($horaInicioStr)->format('H:i:s');
+        }
+
+        if (preg_match('/^\d{2}:\d{2}$/', $horaInicioStr)) {
+            $horaInicioStr .= ':00';
+        }
+
+        return Carbon::parse("{$fechaStr} {$horaInicioStr}");
+    }
+
+    /**
+     * ✅ Fecha+hora_fin
      */
     public function finDateTime(): Carbon
     {
@@ -161,12 +184,10 @@ class Turno extends Model
 
         $horaFinStr = (string) ($this->hora_fin ?? '00:00:00');
 
-        // Si viene con fecha completa, nos quedamos con la hora
         if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaFinStr)) {
             $horaFinStr = Carbon::parse($horaFinStr)->format('H:i:s');
         }
 
-        // Si viene "19:00" -> "19:00:00"
         if (preg_match('/^\d{2}:\d{2}$/', $horaFinStr)) {
             $horaFinStr .= ':00';
         }
@@ -174,11 +195,6 @@ class Turno extends Model
         return Carbon::parse("{$fechaStr} {$horaFinStr}");
     }
 
-    /**
-     * ✅ Un turno se puede marcar vencido sólo si:
-     * - ya pasó el fin del turno
-     * - y NO está pagado / cancelado / rechazado
-     */
     public function deberiaMarcarseVencido(): bool
     {
         if (in_array($this->estado, [

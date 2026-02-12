@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\OfertaSolicitud;
 use App\Models\SolicitudDisponibilidad;
+use App\Models\Turno;
 use App\Services\SolicitudMatchingService;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -32,7 +33,7 @@ class ProcesarSolicitudesDisponibilidadJob implements ShouldQueue
 
         foreach ($solicitudes as $s) {
 
-            // Si el rango real ya pasó (fecha + hora_fin) -> marcar vencida/expirada
+            // Si el rango real ya pasó (fecha + hora_fin) -> expirar
             if ($this->solicitudYaPaso($s)) {
                 $s->update(['estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA]);
                 continue;
@@ -60,6 +61,24 @@ class ProcesarSolicitudesDisponibilidadJob implements ShouldQueue
                     }
 
                     $profesorId = (int) $c['profesor_id'];
+
+                    // ✅ NUEVO: si el alumno YA canceló un turno con ESTE profe en ESTE slot,
+                    // NO volver a ofrecerle ese mismo profe para ese horario.
+                    $yaCanceloConEsteProfeEnEsteSlot = Turno::query()
+                        ->where('alumno_id', (int) $s->alumno_id)
+                        ->where('profesor_id', $profesorId)
+                        ->whereDate('fecha', Carbon::parse($s->fecha)->toDateString())
+                        ->where('estado', Turno::ESTADO_CANCELADO)
+                        ->where(function ($q) use ($slotInicio, $slotFin) {
+                            // solape exacto/por intersección (más robusto)
+                            $q->where('hora_inicio', '<', $slotFin)
+                              ->where('hora_fin', '>', $slotInicio);
+                        })
+                        ->exists();
+
+                    if ($yaCanceloConEsteProfeEnEsteSlot) {
+                        continue;
+                    }
 
                     // Evitar duplicar ofertas vigentes para mismo profe + mismo slot
                     $yaExisteVigente = OfertaSolicitud::query()
@@ -118,7 +137,7 @@ class ProcesarSolicitudesDisponibilidadJob implements ShouldQueue
             $next = $cursor->copy()->addHour();
 
             if ($next->gt($tFin)) {
-                break; // no arma slot incompleto
+                break;
             }
 
             $slots[] = [$cursor->format('H:i:s'), $next->format('H:i:s')];

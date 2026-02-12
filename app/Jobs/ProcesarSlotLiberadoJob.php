@@ -21,14 +21,15 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
         public int $profesorId,
         public string $fecha,       // Y-m-d
         public string $horaInicio,  // H:i:s
-        public string $horaFin      // H:i:s
+        public string $horaFin,     // H:i:s
+        public ?int $excludeAlumnoId = null, // ✅ NUEVO
     ) {}
 
     public function handle(SolicitudMatchingService $matcher): void
     {
         $ttlMin = (int) config('matching.offer_ttl_minutes', 30);
 
-        // 1) Verificar que el profe realmente esté libre (por si hubo carrera)
+        // 1) Verificar que el profe realmente esté libre
         $hayChoque = Turno::query()
             ->where('profesor_id', $this->profesorId)
             ->whereDate('fecha', $this->fecha)
@@ -52,6 +53,9 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
         $solicitudes = SolicitudDisponibilidad::query()
             ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
             ->whereDate('fecha', $this->fecha)
+            ->when($this->excludeAlumnoId, function ($q) {
+                $q->where('alumno_id', '!=', $this->excludeAlumnoId); // ✅ EXCLUIR al que canceló
+            })
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
@@ -72,7 +76,7 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
                 continue;
             }
 
-            // 3) Determinar el slot “usable” = intersección solicitud vs slot liberado
+            // 3) Slot usable = intersección solicitud vs slot liberado
             $slotInicio = max(
                 $matcher->normalizarHora((string) $s->hora_inicio),
                 $matcher->normalizarHora($this->horaInicio),
@@ -83,7 +87,6 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
                 $matcher->normalizarHora($this->horaFin),
             );
 
-            // Si no hay tramo válido
             if ($slotInicio >= $slotFin) {
                 continue;
             }
@@ -97,7 +100,7 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
                 continue;
             }
 
-            // 5) Crear/actualizar oferta por SLOT (no pisa otros slots)
+            // 5) Crear/actualizar oferta por SLOT
             OfertaSolicitud::updateOrCreate(
                 [
                     'solicitud_id' => $s->id,

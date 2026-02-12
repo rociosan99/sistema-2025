@@ -45,18 +45,17 @@ class OfertasSolicitudes extends Page
         foreach ($rows as $o) {
             $s = $o->solicitud;
 
-            // Si por algún motivo no existe la solicitud o ya no está activa -> expirar
+            // Si no existe la solicitud o ya no está activa -> expirar
             if (! $s || $s->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
                 $o->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                 continue;
             }
 
-            // Slot real de la oferta (si por alguna razón viene null, cae al rango de la solicitud)
+            // Slot real de la oferta
             $slotInicio = (string) ($o->hora_inicio ?? $s->hora_inicio);
             $slotFin    = (string) ($o->hora_fin ?? $s->hora_fin);
 
-            // ✅ LIMPIEZA AUTOMÁTICA:
-            // Si ya hay un turno ocupando ese slot, esta oferta ya no sirve -> expirar
+            // ✅ LIMPIEZA: si ya hay un turno ocupando ese slot -> expirar
             $hayChoque = Turno::query()
                 ->where('profesor_id', $profesorId)
                 ->whereDate('fecha', $s->fecha->toDateString())
@@ -77,11 +76,34 @@ class OfertasSolicitudes extends Page
                 continue;
             }
 
-            // Mostrar
+            // ✅ RECOMENDACIÓN:
+            // Si existe un TURNO CANCELADO recientemente del profe en ese mismo slot,
+            // marcamos la oferta como recomendada (porque “reemplaza” esa hora).
+            $turnoCancelado = Turno::query()
+                ->where('profesor_id', $profesorId)
+                ->where('estado', Turno::ESTADO_CANCELADO)
+                ->whereDate('fecha', $s->fecha->toDateString())
+                ->where(function ($q) use ($slotInicio, $slotFin) {
+                    $q->where('hora_inicio', '<', $slotFin)
+                      ->where('hora_fin', '>', $slotInicio);
+                })
+                // “reciente”: usá updated_at porque es cuando pasó a cancelado
+                ->where('updated_at', '>=', now()->subDays(2))
+                ->orderByDesc('updated_at')
+                ->first();
+
+            $recomendada = (bool) $turnoCancelado;
+
             $visibles[] = [
                 'id' => $o->id,
                 'expires_at' => $o->expires_at?->format('d/m/Y H:i') ?? '-',
                 'solicitud_id' => $s->id,
+
+                'recomendada' => $recomendada,
+                'recomendacion_texto' => $recomendada
+                    ? 'Se liberó este horario por una cancelación'
+                    : '—',
+
                 'alumno' => $s->alumno?->name ?? '-',
                 'materia' => $s->materia?->materia_nombre ?? '-',
                 'tema' => $s->tema?->tema_nombre ?? 'Sin tema',
@@ -90,6 +112,14 @@ class OfertasSolicitudes extends Page
                 'hora_fin' => substr((string) $slotFin, 0, 5),
             ];
         }
+
+        // ✅ ORDEN: recomendadas primero, luego por vencimiento
+        usort($visibles, function ($a, $b) {
+            if (($a['recomendada'] ?? false) !== ($b['recomendada'] ?? false)) {
+                return ($b['recomendada'] ?? false) <=> ($a['recomendada'] ?? false);
+            }
+            return strcmp((string) $a['expires_at'], (string) $b['expires_at']);
+        });
 
         $this->ofertas = $visibles;
     }
@@ -153,11 +183,9 @@ class OfertasSolicitudes extends Page
                     throw new \RuntimeException('La solicitud expiró.');
                 }
 
-                // ✅ Slot real a asignar: el de la OFERTA
                 $slotInicio = (string) ($oferta->hora_inicio ?? $s->hora_inicio);
                 $slotFin    = (string) ($oferta->hora_fin ?? $s->hora_fin);
 
-                // Anti-carrera: validar que el profe sigue libre en ese slot
                 $hayChoque = Turno::query()
                     ->where('profesor_id', $profesorId)
                     ->whereDate('fecha', $s->fecha->toDateString())
@@ -179,25 +207,19 @@ class OfertasSolicitudes extends Page
                     throw new \RuntimeException('Ya no estás disponible en ese horario.');
                 }
 
-                // ✅ Crear el turno SOLO por el slot (1 hora) y queda pendiente_pago
                 Turno::create([
                     'alumno_id'   => $s->alumno_id,
                     'profesor_id' => $profesorId,
                     'materia_id'  => $s->materia_id,
-                    'tema_id'     => $s->tema_id, // puede ser null si tu tabla lo permite
+                    'tema_id'     => $s->tema_id,
                     'fecha'       => $s->fecha->toDateString(),
                     'hora_inicio' => $slotInicio,
                     'hora_fin'    => $slotFin,
                     'estado'      => Turno::ESTADO_PENDIENTE_PAGO,
                 ]);
 
-                // ✅ Aceptar solo ESTA oferta
                 $oferta->update(['estado' => OfertaSolicitud::ESTADO_ACEPTADA]);
 
-                // ✅ NO marcar solicitud como tomada (porque querés multi-slot)
-                // $s->update(['estado' => SolicitudDisponibilidad::ESTADO_TOMADA]); // ❌
-
-                // ✅ Expirar SOLO otras ofertas del MISMO SLOT de esta solicitud
                 OfertaSolicitud::query()
                     ->where('solicitud_id', $s->id)
                     ->where('hora_inicio', $slotInicio)
@@ -206,7 +228,6 @@ class OfertasSolicitudes extends Page
                     ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
                     ->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
 
-                // ✅ Limpieza: expirar ofertas PENDIENTES de este profesor que choquen con el turno recién creado
                 OfertaSolicitud::query()
                     ->where('profesor_id', $profesorId)
                     ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)

@@ -21,6 +21,7 @@
                 <table style="width:100%; border-collapse:collapse; font-size:13px;">
                     <thead>
                         <tr style="background:#f9fafb;">
+                            <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Recomendada</th>
                             <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Alumno</th>
                             <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Materia</th>
                             <th style="text-align:left; padding:10px; border-bottom:1px solid #e5e7eb;">Tema</th>
@@ -33,16 +34,31 @@
                     <tbody>
                         @foreach($this->ofertas as $o)
                             <tr>
+                                <td style="padding:10px; border-bottom:1px solid #f1f5f9;">
+                                    @if(!empty($o['recomendada']))
+                                        <span style="display:inline-block; padding:4px 8px; border-radius:999px; background:#dcfce7; color:#166534; font-weight:800;">
+                                            ✅ Recomendada
+                                        </span>
+                                        <div style="margin-top:6px; font-size:12px; color:#166534;">
+                                            {{ $o['recomendacion_texto'] ?? '' }}
+                                        </div>
+                                    @else
+                                        <span style="color:#9ca3af;">—</span>
+                                    @endif
+                                </td>
+
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{{ $o['alumno'] }}</td>
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{{ $o['materia'] }}</td>
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{{ $o['tema'] }}</td>
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{{ $o['fecha'] }}</td>
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{{ $o['hora_inicio'] }} - {{ $o['hora_fin'] }}</td>
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9;">{{ $o['expires_at'] }}</td>
+
                                 <td style="padding:10px; border-bottom:1px solid #f1f5f9; display:flex; gap:8px; flex-wrap:wrap;">
                                     <x-filament::button size="sm" wire:click="aceptar({{ $o['id'] }})">
                                         Aceptar
                                     </x-filament::button>
+
                                     <x-filament::button size="sm" color="danger" wire:click="rechazar({{ $o['id'] }})">
                                         Rechazar
                                     </x-filament::button>

@@ -10,7 +10,6 @@ use Spatie\Activitylog\LogOptions;
 
 class OfertaSolicitud extends Model
 {
-    // ✅ Auditoría automática
     use LogsActivity;
 
     protected $table = 'ofertas_solicitud';
@@ -26,6 +25,7 @@ class OfertaSolicitud extends Model
         'hora_inicio',
         'hora_fin',
         'estado',
+        'origen',      // ✅ NUEVO
         'expires_at',
     ];
 
@@ -33,9 +33,6 @@ class OfertaSolicitud extends Model
         'expires_at' => 'datetime',
     ];
 
-    /* =========================
-     * ✅ Auditoría (Spatie)
-     * ========================= */
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -46,6 +43,7 @@ class OfertaSolicitud extends Model
                 'hora_inicio',
                 'hora_fin',
                 'estado',
+                'origen',      // ✅ NUEVO
                 'expires_at',
             ])
             ->logOnlyDirty()
