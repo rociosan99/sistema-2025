@@ -1,9 +1,9 @@
 @component('mail::message')
-# Clase cancelada (ya estaba pagada)
+# Clase cancelada 
 
 Hola {{ $turno->profesor?->name ?? 'Profesor/a' }},
 
-Te avisamos que el alumno **{{ $turno->alumno?->name ?? '—' }}** canceló una clase que ya estaba pagada.
+Te avisamos que el alumno **{{ $turno->alumno?->name ?? '—' }}** canceló una clase.
 
 **Detalle de la clase cancelada:**
 - **Fecha:** {{ $fecha }}
@@ -17,6 +17,5 @@ Para intentar cubrir ese horario con otro alumno, ingresá al panel:
 Ver ofertas de solicitudes
 @endcomponent
 
-Gracias,  
-{{ config('app.name') }}
+Gracias
 @endcomponent

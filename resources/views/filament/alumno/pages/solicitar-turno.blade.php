@@ -36,9 +36,56 @@
                 @if($this->tema)
                     — tema: <span style="font-weight:900;">{{ $this->tema->tema_nombre }}</span>
                 @endif
-                . Te mostraremos profesores con horarios disponibles y mejor puntuación primero.
+                .
             </p>
         </div>
+
+        {{-- Contexto académico (carrera activa) --}}
+        @php
+            $user = auth()->user();
+            $carreraActiva = $user?->carreraActiva?->carrera_nombre;
+            $institucionActiva = $user?->carreraActiva?->institucion?->institucion_nombre;
+        @endphp
+
+        @if(!$carreraActiva)
+            <div style="
+                border:1px solid #fde68a;
+                background:#fffbeb;
+                color:#92400e;
+                padding:12px 14px;
+                border-radius:12px;
+                font-size:13px;
+                font-weight:800;
+            ">
+                Para solicitar turnos, completá tu perfil académico y elegí una <strong>carrera activa</strong>.
+
+                <div style="margin-top:10px;">
+                    <a href="{{ \App\Filament\Alumno\Pages\MiPerfil::getUrl() }}">
+                        <x-filament::button size="sm" color="warning">
+                            Ir a Mi perfil
+                        </x-filament::button>
+                    </a>
+                </div>
+            </div>
+        @else
+            <div style="
+                border:1px solid #e5e7eb;
+                background:#fff;
+                padding:12px 14px;
+                border-radius:12px;
+                font-size:13px;
+                box-shadow:0 10px 22px rgba(15,23,42,.06);
+            ">
+                <strong>Carrera activa:</strong> {{ $carreraActiva }}
+                @if($institucionActiva)
+                    <span style="color:#6b7280;">— {{ $institucionActiva }}</span>
+                @endif
+                <a style="margin-left:10px; font-weight:900; color:#1d4ed8;"
+                   href="{{ \App\Filament\Alumno\Pages\MiPerfil::getUrl() }}">
+                    Cambiar
+                </a>
+            </div>
+        @endif
 
         {{-- Buscador + fecha --}}
         <div style="
@@ -51,64 +98,6 @@
             gap:18px;
             box-shadow:0 10px 22px rgba(15,23,42,.06);
         ">
-
-            {{-- Institución + Carrera --}}
-            <div style="display:flex; gap:12px; flex-wrap:wrap;">
-
-                <div style="display:flex; flex-direction:column; gap:8px; min-width:260px; flex:1;">
-                    <label style="font-size:13px; font-weight:900; color:#111827;">
-                        Institución
-                    </label>
-
-                    <select
-                        wire:model.live="institucionId"
-                        style="
-                            width:100%;
-                            border-radius:12px;
-                            border:1px solid #d1d5db;
-                            padding:10px 12px;
-                            font-size:14px;
-                            background:#fff;
-                        "
-                    >
-                        <option value="">Seleccioná una institución…</option>
-                        @foreach($institucionesOptions as $id => $nombre)
-                            <option value="{{ $id }}">{{ $nombre }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div style="display:flex; flex-direction:column; gap:8px; min-width:260px; flex:1;">
-                    <label style="font-size:13px; font-weight:900; color:#111827;">
-                        Carrera
-                    </label>
-
-                    <select
-                        wire:model.live="carreraId"
-                        @disabled(empty($carrerasOptions))
-                        style="
-                            width:100%;
-                            border-radius:12px;
-                            border:1px solid #d1d5db;
-                            padding:10px 12px;
-                            font-size:14px;
-                            background:#fff;
-                        "
-                    >
-                        <option value="">Seleccioná una carrera…</option>
-                        @foreach($carrerasOptions as $id => $nombre)
-                            <option value="{{ $id }}">{{ $nombre }}</option>
-                        @endforeach
-                    </select>
-
-                    @if(empty($carrerasOptions) && $this->institucionId)
-                        <p style="font-size:11px; color:#6b7280; margin:0;">
-                            Esta institución no tiene carreras cargadas.
-                        </p>
-                    @endif
-                </div>
-
-            </div>
 
             {{-- Buscador --}}
             <div style="display:flex; flex-direction:column; gap:8px;">
@@ -162,22 +151,6 @@
                         </button>
                     </div>
                 </div>
-
-                {{-- Mensaje si escribe y no eligió carrera --}}
-                @if(mb_strlen($busqueda ?? '') >= 2 && !$this->carreraId)
-                    <div style="
-                        margin-top:8px;
-                        border:1px solid #fde68a;
-                        background:#fffbeb;
-                        color:#92400e;
-                        padding:10px 12px;
-                        border-radius:12px;
-                        font-size:13px;
-                        font-weight:700;
-                    ">
-                        Elegí una carrera para poder buscar materias y temas.
-                    </div>
-                @endif
 
                 {{-- Sugerencias --}}
                 @if(!empty($sugerenciasMaterias) || !empty($sugerenciasTemas))
@@ -355,7 +328,7 @@
                         </div>
 
                     @else
-                        {{-- (tu bloque de cards de slots sigue igual, sin cambios) --}}
+                        {{-- cards de slots (igual que ya tenías) --}}
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px;">
                             @foreach($slots as $i => $s)
                                 @php

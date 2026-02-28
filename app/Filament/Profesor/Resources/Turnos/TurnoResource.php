@@ -17,7 +17,7 @@ class TurnoResource extends Resource
     protected static ?string $navigationLabel = 'Solicitudes de Turno';
     protected static ?string $pluralModelLabel = 'Solicitudes';
 
-    protected static \BackedEnum | string | null $navigationIcon = 'heroicon-o-calendar-days';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-calendar-days';
 
     /**
      * 🔹 Mostrar TODOS los turnos del profesor (historial)

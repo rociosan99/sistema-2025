@@ -4,6 +4,7 @@ namespace App\Filament\Alumno\Resources\Turnos;
 
 use App\Filament\Alumno\Resources\Turnos\Pages\ListTurnos;
 use App\Models\Turno;
+use App\Models\User;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
@@ -11,8 +12,11 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 
+use Filament\Forms\Components\DatePicker;
+use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\ViewColumn;
+use Filament\Tables\Enums\FiltersLayout;
 
 class TurnoResource extends Resource
 {
@@ -78,12 +82,79 @@ class TurnoResource extends Resource
 
                 TextColumn::make('profesor.name')
                     ->label('Profesor')
+                    ->formatStateUsing(function ($state, Turno $record) {
+                        $nombre = trim(($record->profesor?->name ?? '') . ' ' . ($record->profesor?->apellido ?? ''));
+                        return $nombre !== '' ? $nombre : ($record->profesor?->name ?? '-');
+                    })
                     ->placeholder('-'),
 
                 ViewColumn::make('acciones')
                     ->label('Acciones')
                     ->view('filament.alumno.turnos.acciones'),
             ])
+
+            // ✅ filtros visibles arriba
+            ->filtersLayout(FiltersLayout::AboveContent)
+
+            // ✅ 3 columnas para que quede: Estado | Materia | Profesor
+            // y luego: Desde | Hasta (baja solo)
+            ->filtersFormColumns(3)
+
+            ->filters([
+                // ✅ Estado
+                Tables\Filters\SelectFilter::make('estado')
+                    ->label('Estado')
+                    ->options([
+                        Turno::ESTADO_PENDIENTE      => 'Pendiente',
+                        Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
+                        Turno::ESTADO_CONFIRMADO     => 'Clase pagada',
+                        Turno::ESTADO_RECHAZADO      => 'Rechazado',
+                        Turno::ESTADO_CANCELADO      => 'Cancelado',
+                        Turno::ESTADO_VENCIDO        => 'Vencido',
+                        Turno::ESTADO_ACEPTADO       => 'Aceptado (legacy)',
+                    ])
+                    ->native(false),
+
+                // ✅ Materia
+                Tables\Filters\SelectFilter::make('materia_id')
+                    ->label('Materia')
+                    ->relationship('materia', 'materia_nombre')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+
+                // ✅ Profesor (nombre + apellido)
+                Tables\Filters\SelectFilter::make('profesor_id')
+                    ->label('Profesor')
+                    ->options(function () {
+                        return User::query()
+                            ->where('role', 'profesor')
+                            ->orderBy('name')
+                            ->get(['id', 'name', 'apellido'])
+                            ->mapWithKeys(function ($u) {
+                                $nombre = trim(($u->name ?? '') . ' ' . ($u->apellido ?? ''));
+                                return [$u->id => ($nombre !== '' ? $nombre : ($u->name ?? 'Profesor'))];
+                            })
+                            ->toArray();
+                    })
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+
+                // ✅ Rango de fechas (desde / hasta)
+                Tables\Filters\Filter::make('rango_fechas')
+                    ->label('Fecha')
+                    ->form([
+                        DatePicker::make('desde')->label('Desde'),
+                        DatePicker::make('hasta')->label('Hasta'),
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        return $query
+                            ->when($data['desde'] ?? null, fn (Builder $q, $desde) => $q->whereDate('fecha', '>=', $desde))
+                            ->when($data['hasta'] ?? null, fn (Builder $q, $hasta) => $q->whereDate('fecha', '<=', $hasta));
+                    }),
+            ])
+
             ->defaultSort('fecha', 'asc')
             ->emptyStateHeading('No tenés turnos aún')
             ->emptyStateDescription('Solicitá un turno desde el botón "Solicitar turno".');

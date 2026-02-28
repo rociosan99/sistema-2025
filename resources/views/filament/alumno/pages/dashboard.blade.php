@@ -151,6 +151,12 @@
             box-shadow: inset 0 0 0 1px rgba(34, 197, 94, .22);
         }
 
+        .al-badge-warn{
+            background: rgba(245, 158, 11, .12);
+            color:#92400e;
+            box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .22);
+        }
+
         /* ====== Info rows ====== */
         .al-info{
             display:flex;
@@ -185,11 +191,13 @@
             text-align:right;
         }
 
-        /* ====== Acción ====== */
+        /* ====== Acciones ====== */
         .al-actions{
             display:flex;
             justify-content:flex-end;
             margin-top:12px;
+            gap:8px;
+            flex-wrap:wrap;
         }
 
         .al-btn{
@@ -199,9 +207,6 @@
             padding:10px 12px;
             font-weight:900;
             font-size:13px;
-            color:#0f172a;
-            background: linear-gradient(135deg, #fde68a 0%, #f59e0b 55%, #fb7185 100%);
-            box-shadow: 0 12px 24px rgba(245, 158, 11, .25);
             transition: transform .08s ease, box-shadow .12s ease;
             display:inline-flex;
             align-items:center;
@@ -210,21 +215,37 @@
 
         .al-btn:hover{
             transform: translateY(-1px);
-            box-shadow: 0 16px 30px rgba(245, 158, 11, .28);
         }
 
         .al-btn:active{
             transform: translateY(0px) scale(.99);
         }
 
+        .al-btn-rate{
+            color:#0f172a;
+            background: linear-gradient(135deg, #fde68a 0%, #f59e0b 55%, #fb7185 100%);
+            box-shadow: 0 12px 24px rgba(245, 158, 11, .25);
+        }
+
+        .al-btn-accept{
+            color:#fff;
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 12px 24px rgba(34, 197, 94, .22);
+        }
+
+        .al-btn-reject{
+            color:#0f172a;
+            background:#e5e7eb;
+            box-shadow: 0 12px 24px rgba(15,23,42,.08);
+        }
+
         .al-star{
-            display:inline-block;
+            display:inline-flex;
             width:18px;
             height:18px;
             border-radius:6px;
             background: rgba(255,255,255,.35);
             box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
-            display:flex;
             align-items:center;
             justify-content:center;
         }
@@ -250,6 +271,53 @@
             font-size:13px;
             color: rgba(15, 23, 42, .72);
         }
+
+        /* ====== Sección (caja grande) ====== */
+        .al-section{
+            border:1px solid rgba(15,23,42,.10);
+            border-radius:18px;
+            overflow:hidden;
+            background:#fff;
+            box-shadow: 0 16px 34px rgba(0,0,0,.10);
+            margin-bottom:18px;
+        }
+
+        .al-section-head{
+            padding:14px 18px;
+            color:#fff;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+        }
+
+        .al-section-title{
+            font-size:16px;
+            font-weight:900;
+            margin:0;
+        }
+
+        .al-section-sub{
+            font-size:12px;
+            opacity:.92;
+            margin-top:2px;
+        }
+
+        .al-section-pill{
+            display:inline-flex;
+            align-items:center;
+            gap:8px;
+            padding:7px 10px;
+            border-radius:999px;
+            background:rgba(255,255,255,.18);
+            font-size:12px;
+            font-weight:900;
+        }
+
+        .al-section-body{
+            padding:16px;
+        }
     </style>
 
     <div class="al-dashboard-wrap">
@@ -258,7 +326,6 @@
         <div class="al-header">
             <div class="al-header-left">
                 <div class="al-avatar" aria-hidden="true">
-                    {{-- Icono simple (sin Tailwind) --}}
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                         <path d="M12 2l9 5-9 5-9-5 9-5Z" stroke="white" stroke-width="2" />
                         <path d="M3 7v10l9 5 9-5V7" stroke="white" stroke-width="2" opacity=".9"/>
@@ -276,13 +343,100 @@
                     Pendientes:
                 </span>
                 <span style="font-size:14px;font-weight:1000;">
-                    {{ count($this->pendientes) }}
+                    {{ count($this->pendientes ?? []) }}
                 </span>
             </div>
         </div>
 
-        {{-- Cards --}}
-        @if (count($this->pendientes))
+        {{-- =========================
+           INVITACIONES DE REEMPLAZO
+           (requiere $this->invitacionesReemplazo)
+        ========================= --}}
+        @if (!empty($this->invitacionesReemplazo) && count($this->invitacionesReemplazo))
+            <div class="al-section">
+                <div class="al-section-head" style="background: linear-gradient(135deg, #111827 0%, #1d4ed8 55%, #0ea5e9 100%);">
+                    <div>
+                        <div class="al-section-title">Clases disponibles para tomar</div>
+                        <div class="al-section-sub">
+                            Si aceptás, se te asigna el turno y luego lo pagás.
+                        </div>
+                    </div>
+
+                    <div class="al-section-pill">
+                        {{ count($this->invitacionesReemplazo) }} invitación(es)
+                    </div>
+                </div>
+
+                <div class="al-section-body">
+                    <div class="al-grid">
+                        @foreach ($this->invitacionesReemplazo as $i)
+                            <div class="al-card">
+                                <div class="al-card-inner">
+
+                                    <div class="al-card-top">
+                                        <div>
+                                            <p class="al-time">{{ $i['hora_inicio'] }} - {{ $i['hora_fin'] }}</p>
+
+                                            <div class="al-badges">
+                                                <span class="al-badge al-badge-date">📅 {{ $i['fecha'] }}</span>
+                                                <span class="al-badge al-badge-warn">⏳ Vence: {{ $i['vence'] }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="al-info">
+                                        <div class="al-row">
+                                            <div>
+                                                <p class="al-label">Profesor</p>
+                                                <p class="al-value" style="text-align:left;">{{ $i['profesor'] ?? '-' }}</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="al-row">
+                                            <div>
+                                                <p class="al-label">Materia</p>
+                                                <p class="al-value" style="text-align:left;">{{ $i['materia'] ?? '-' }}</p>
+                                            </div>
+                                        </div>
+
+                                        <div class="al-row">
+                                            <div>
+                                                <p class="al-label">Tema</p>
+                                                <p class="al-value" style="text-align:left;">{{ $i['tema'] ?? 'Sin tema' }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="al-actions">
+                                        <button
+                                            class="al-btn al-btn-accept"
+                                            type="button"
+                                            wire:click="mountAction('aceptar_reemplazo', { reemplazo_id: {{ (int) ($i['id'] ?? 0) }} })"
+                                        >
+                                            ✅ Aceptar
+                                        </button>
+
+                                        <button
+                                            class="al-btn al-btn-reject"
+                                            type="button"
+                                            wire:click="mountAction('rechazar_reemplazo', { reemplazo_id: {{ (int) ($i['id'] ?? 0) }} })"
+                                        >
+                                            ✖ Rechazar
+                                        </button>
+                                    </div>
+
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        {{-- =========================
+           CALIFICACIONES PENDIENTES
+        ========================= --}}
+        @if (!empty($this->pendientes) && count($this->pendientes))
             <div class="al-grid">
                 @foreach ($this->pendientes as $p)
                     <div class="al-card">
@@ -324,7 +478,7 @@
 
                             <div class="al-actions">
                                 <button
-                                    class="al-btn"
+                                    class="al-btn al-btn-rate"
                                     type="button"
                                     wire:click="mountAction('calificar', { turno_id: {{ $p['id'] }} })"
                                 >

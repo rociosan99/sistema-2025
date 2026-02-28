@@ -8,6 +8,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $apellido
+ * @property string $email
+ * @property string $role
+ * @property int|null $carrera_activa_id
+ * @property string|null $profile_photo_path
+ */
 class User extends Authenticatable implements FilamentUser
 {
     use HasFactory, Notifiable;
@@ -17,7 +26,9 @@ class User extends Authenticatable implements FilamentUser
         'apellido',
         'email',
         'password',
-        'role', // admin | profesor | alumno
+        'role',
+        'carrera_activa_id',
+        'profile_photo_path',
     ];
 
     protected $hidden = [
@@ -33,7 +44,6 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
-    // Helpers de rol (en base a admin/profesor/alumno)
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
@@ -49,12 +59,6 @@ class User extends Authenticatable implements FilamentUser
         return $this->role === 'alumno';
     }
 
-    /**
-     * ✅ Filament: autorización por panel.
-     * Admin → panel admin
-     * Profesor → panel profesor
-     * Alumno → panel alumno
-     */
     public function canAccessPanel(Panel $panel): bool
     {
         return match ($panel->getId()) {
@@ -66,7 +70,7 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /* ==========================
-       RELACIONES
+       RELACIONES PROFESOR (tuyas)
        ========================== */
 
     public function materias()
@@ -114,19 +118,39 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(Turno::class, 'profesor_id', 'id');
     }
 
-    /**
-     * ✅ Calificaciones que HIZO el usuario (cuando es alumno).
-     */
     public function calificacionesHechas()
     {
         return $this->hasMany(CalificacionProfesor::class, 'alumno_id', 'id');
     }
 
-    /**
-     * ✅ Calificaciones que RECIBE el usuario (cuando es profesor).
-     */
     public function calificacionesRecibidasComoProfesor()
     {
         return $this->hasMany(CalificacionProfesor::class, 'profesor_id', 'id');
+    }
+
+    /* ==========================
+       NUEVO: PERFIL ACADÉMICO ALUMNO
+       ========================== */
+
+    public function carrerasComoAlumno()
+    {
+        return $this->belongsToMany(
+            Carrera::class,
+            'alumno_carreras',
+            'alumno_id',
+            'carrera_id',
+            'id',
+            'carrera_id'
+        )->withTimestamps();
+    }
+
+    public function carreraActiva()
+    {
+        return $this->belongsTo(Carrera::class, 'carrera_activa_id', 'carrera_id');
+    }
+
+    public function profesorProfile()
+    {
+        return $this->hasOne(\App\Models\ProfesorProfile::class, 'user_id', 'id');
     }
 }

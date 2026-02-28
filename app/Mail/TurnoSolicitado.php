@@ -15,17 +15,28 @@ class TurnoSolicitado extends Mailable
 
     public Turno $turno;
 
-    /**
-     * Recibe el turno recién creado
-     */
-    public function __construct(Turno $turno)
-    {
-        $this->turno = $turno;
-    }
+    // ✅ Datos extra
+    public ?string $institucionNombre = null;
+    public ?string $carreraNombre = null;
+
+    // ✅ URL al panel del profesor
+    public string $urlPanelProfesor;
 
     /**
-     * Asunto del mail
+     * Recibe el turno recién creado + institución/carrera (opcional)
      */
+    public function __construct(Turno $turno, ?string $institucionNombre = null, ?string $carreraNombre = null)
+    {
+        // ✅ Asegurar relaciones para el blade
+        $this->turno = $turno->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
+
+        $this->institucionNombre = $institucionNombre;
+        $this->carreraNombre = $carreraNombre;
+
+        // ✅ Donde el profe acepta/rechaza
+        $this->urlPanelProfesor = url('/profesor/turnos');
+    }
+
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -33,22 +44,19 @@ class TurnoSolicitado extends Mailable
         );
     }
 
-    /**
-     * Vista que se va a renderizar
-     */
     public function content(): Content
     {
         return new Content(
             view: 'emails.turno-solicitado',
             with: [
                 'turno' => $this->turno,
+                'institucionNombre' => $this->institucionNombre,
+                'carreraNombre' => $this->carreraNombre,
+                'urlPanelProfesor' => $this->urlPanelProfesor,
             ],
         );
     }
 
-    /**
-     * Adjuntos (no usamos por ahora)
-     */
     public function attachments(): array
     {
         return [];

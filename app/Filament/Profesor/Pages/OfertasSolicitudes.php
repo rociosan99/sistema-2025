@@ -2,9 +2,11 @@
 
 namespace App\Filament\Profesor\Pages;
 
+use App\Models\Materia;
 use App\Models\OfertaSolicitud;
 use App\Models\SolicitudDisponibilidad;
 use App\Models\Turno;
+use App\Models\User;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -23,8 +25,70 @@ class OfertasSolicitudes extends Page
     /** @var array<int, array> */
     public array $ofertas = [];
 
+    // ✅ filtros (no rompen nada si están vacíos)
+    public ?int $fAlumnoId = null;
+    public ?int $fMateriaId = null;
+    public ?string $fFechaDesde = null; // YYYY-mm-dd
+    public ?string $fFechaHasta = null; // YYYY-mm-dd
+    public bool $fSoloRecomendadas = false;
+
+    // ✅ options para selects
+    public array $alumnosOptions = [];
+    public array $materiasOptions = [];
+
     public function mount(): void
     {
+        $this->cargarOpcionesFiltros();
+        $this->cargar();
+    }
+
+    private function cargarOpcionesFiltros(): void
+    {
+        $profesorId = (int) Auth::id();
+
+        // Alumnos que aparecen en ofertas (para este profe)
+        $alumnos = User::query()
+            ->whereIn('id', function ($q) use ($profesorId) {
+                $q->from('ofertas_solicitud')
+                    ->join('solicitudes_disponibilidad', 'solicitudes_disponibilidad.id', '=', 'ofertas_solicitud.solicitud_id')
+                    ->where('ofertas_solicitud.profesor_id', $profesorId)
+                    ->select('solicitudes_disponibilidad.alumno_id')
+                    ->distinct();
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'apellido']);
+
+        $this->alumnosOptions = $alumnos->mapWithKeys(function ($u) {
+            $nombre = trim(($u->name ?? '') . ' ' . ($u->apellido ?? ''));
+            return [$u->id => ($nombre !== '' ? $nombre : ($u->name ?? 'Alumno'))];
+        })->toArray();
+
+        // Materias que aparecen en ofertas (para este profe)
+        $materiaIds = DB::table('ofertas_solicitud')
+            ->join('solicitudes_disponibilidad', 'solicitudes_disponibilidad.id', '=', 'ofertas_solicitud.solicitud_id')
+            ->where('ofertas_solicitud.profesor_id', $profesorId)
+            ->select('solicitudes_disponibilidad.materia_id')
+            ->distinct()
+            ->pluck('materia_id')
+            ->filter()
+            ->values()
+            ->all();
+
+        $this->materiasOptions = Materia::query()
+            ->whereIn('materia_id', $materiaIds)
+            ->orderBy('materia_nombre')
+            ->pluck('materia_nombre', 'materia_id')
+            ->toArray();
+    }
+
+    public function limpiarFiltros(): void
+    {
+        $this->fAlumnoId = null;
+        $this->fMateriaId = null;
+        $this->fFechaDesde = null;
+        $this->fFechaHasta = null;
+        $this->fSoloRecomendadas = false;
+
         $this->cargar();
     }
 
@@ -32,30 +96,65 @@ class OfertasSolicitudes extends Page
     {
         $profesorId = (int) Auth::id();
 
-        $rows = OfertaSolicitud::query()
+        // ✅ Base EXACTA como lo tenías (no cambio lógica)
+        $query = OfertaSolicitud::query()
             ->where('profesor_id', $profesorId)
             ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
             ->where('expires_at', '>', now())
-            ->with(['solicitud.materia', 'solicitud.tema', 'solicitud.alumno'])
-            ->orderBy('expires_at')
-            ->get();
+            ->with([
+                'solicitud.materia',
+                'solicitud.tema',
+                'solicitud.alumno',
+                'recommendedTurno',
+            ])
+            ->orderByDesc('recommended_turno_id')
+            ->orderBy('expires_at');
+
+        // ✅ Filtros (opcionales)
+        if ($this->fSoloRecomendadas) {
+            $query->whereNotNull('recommended_turno_id');
+        }
+
+        if ($this->fAlumnoId) {
+            $query->whereHas('solicitud', function ($q) {
+                $q->where('alumno_id', $this->fAlumnoId);
+            });
+        }
+
+        if ($this->fMateriaId) {
+            $query->whereHas('solicitud', function ($q) {
+                $q->where('materia_id', $this->fMateriaId);
+            });
+        }
+
+        if ($this->fFechaDesde) {
+            $query->whereHas('solicitud', function ($q) {
+                $q->whereDate('fecha', '>=', $this->fFechaDesde);
+            });
+        }
+
+        if ($this->fFechaHasta) {
+            $query->whereHas('solicitud', function ($q) {
+                $q->whereDate('fecha', '<=', $this->fFechaHasta);
+            });
+        }
+
+        $rows = $query->get();
 
         $visibles = [];
 
         foreach ($rows as $o) {
             $s = $o->solicitud;
 
-            // Si no existe la solicitud o ya no está activa -> expirar
+            // ✅ tu limpieza tal cual
             if (! $s || $s->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
                 $o->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                 continue;
             }
 
-            // Slot real de la oferta
             $slotInicio = (string) ($o->hora_inicio ?? $s->hora_inicio);
             $slotFin    = (string) ($o->hora_fin ?? $s->hora_fin);
 
-            // ✅ LIMPIEZA: si ya hay un turno ocupando ese slot -> expirar
             $hayChoque = Turno::query()
                 ->where('profesor_id', $profesorId)
                 ->whereDate('fecha', $s->fecha->toDateString())
@@ -76,23 +175,13 @@ class OfertasSolicitudes extends Page
                 continue;
             }
 
-            // ✅ RECOMENDACIÓN:
-            // Si existe un TURNO CANCELADO recientemente del profe en ese mismo slot,
-            // marcamos la oferta como recomendada (porque “reemplaza” esa hora).
-            $turnoCancelado = Turno::query()
-                ->where('profesor_id', $profesorId)
-                ->where('estado', Turno::ESTADO_CANCELADO)
-                ->whereDate('fecha', $s->fecha->toDateString())
-                ->where(function ($q) use ($slotInicio, $slotFin) {
-                    $q->where('hora_inicio', '<', $slotFin)
-                      ->where('hora_fin', '>', $slotInicio);
-                })
-                // “reciente”: usá updated_at porque es cuando pasó a cancelado
-                ->where('updated_at', '>=', now()->subDays(2))
-                ->orderByDesc('updated_at')
-                ->first();
+            $recomendada = ! empty($o->recommended_turno_id);
+            $texto = $recomendada ? 'Se liberó este horario por una cancelación' : '—';
 
-            $recomendada = (bool) $turnoCancelado;
+            $alumnoNombre = trim(($s->alumno?->name ?? '') . ' ' . ($s->alumno?->apellido ?? ''));
+            if ($alumnoNombre === '') {
+                $alumnoNombre = $s->alumno?->name ?? '-';
+            }
 
             $visibles[] = [
                 'id' => $o->id,
@@ -100,11 +189,9 @@ class OfertasSolicitudes extends Page
                 'solicitud_id' => $s->id,
 
                 'recomendada' => $recomendada,
-                'recomendacion_texto' => $recomendada
-                    ? 'Se liberó este horario por una cancelación'
-                    : '—',
+                'recomendacion_texto' => $texto,
 
-                'alumno' => $s->alumno?->name ?? '-',
+                'alumno' => $alumnoNombre,
                 'materia' => $s->materia?->materia_nombre ?? '-',
                 'tema' => $s->tema?->tema_nombre ?? 'Sin tema',
                 'fecha' => $s->fecha->format('d/m/Y'),
@@ -113,7 +200,6 @@ class OfertasSolicitudes extends Page
             ];
         }
 
-        // ✅ ORDEN: recomendadas primero, luego por vencimiento
         usort($visibles, function ($a, $b) {
             if (($a['recomendada'] ?? false) !== ($b['recomendada'] ?? false)) {
                 return ($b['recomendada'] ?? false) <=> ($a['recomendada'] ?? false);
@@ -151,7 +237,6 @@ class OfertasSolicitudes extends Page
         try {
             DB::transaction(function () use ($ofertaId, $profesorId) {
 
-                /** @var OfertaSolicitud $oferta */
                 $oferta = OfertaSolicitud::query()
                     ->where('profesor_id', $profesorId)
                     ->lockForUpdate()
@@ -167,7 +252,6 @@ class OfertasSolicitudes extends Page
                     throw new \RuntimeException('Oferta vencida.');
                 }
 
-                /** @var SolicitudDisponibilidad $s */
                 $s = SolicitudDisponibilidad::query()
                     ->lockForUpdate()
                     ->findOrFail($oferta->solicitud_id);

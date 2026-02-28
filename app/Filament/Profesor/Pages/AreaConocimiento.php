@@ -22,12 +22,17 @@ class AreaConocimiento extends Page implements HasForms
     protected static ?string $navigationLabel = 'Mi área de conocimiento';
     protected static ?string $title = 'Mi área de conocimiento';
     protected static ?string $slug = 'area-conocimiento';
-
     protected static ?int $navigationSort = 10;
 
     protected string $view = 'filament.profesor.pages.area-conocimiento';
 
     public array $data = [];
+
+    // ✅ AGREGAR ESTO: oculta el item del menú, pero no elimina la página ni rompe nada
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 
     public function mount(): void
     {
@@ -86,7 +91,7 @@ class AreaConocimiento extends Page implements HasForms
                 ->addActionLabel('Agregar materia')
                 ->reorderable(),
 
-            // 🔹 Temas (heredan el precio de la materia)
+            // 🔹 Temas
             Select::make('temas')
                 ->label('Temas que domino')
                 ->multiple()
@@ -103,7 +108,6 @@ class AreaConocimiento extends Page implements HasForms
 
         // Materias + precio por HORA en profesor_materia
         $materiasInput = $state['materias'] ?? [];
-
         $syncMaterias = [];
 
         foreach ($materiasInput as $item) {

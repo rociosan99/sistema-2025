@@ -5,7 +5,6 @@ namespace App\Providers\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
@@ -29,9 +28,15 @@ class ProfesorPanelProvider extends PanelProvider
             ->authGuard('web')
             ->colors(['primary' => Color::Indigo])
             ->brandName('Portal Profesores')
-            ->discoverResources(in: app_path('Filament/Profesor/Resources'), for: 'App\\Filament\\Profesor\\Resources')
-            ->discoverPages(in: app_path('Filament/Profesor/Pages'), for: 'App\\Filament\\Profesor\\Pages')
-            ->pages([Dashboard::class])
+            ->discoverResources(
+                in: app_path('Filament/Profesor/Resources'),
+                for: 'App\\Filament\\Profesor\\Resources'
+            )
+            ->discoverPages(
+                in: app_path('Filament/Profesor/Pages'),
+                for: 'App\\Filament\\Profesor\\Pages'
+            )
+            // ✅ quitamos el Dashboard default de Filament (Escritorio)
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

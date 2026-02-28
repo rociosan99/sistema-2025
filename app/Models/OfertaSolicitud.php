@@ -3,8 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
-// ✅ Spatie Activitylog
 use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
 
@@ -25,12 +23,18 @@ class OfertaSolicitud extends Model
         'hora_inicio',
         'hora_fin',
         'estado',
-        'origen',      // ✅ NUEVO
         'expires_at',
+
+        // ✅ RECOMENDACIÓN (NUEVO)
+        'recommended_turno_id',
+        'recommended_reason',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
+        'hora_inicio' => 'string',
+        'hora_fin' => 'string',
+        'recommended_turno_id' => 'integer',
     ];
 
     public function getActivitylogOptions(): LogOptions
@@ -43,8 +47,9 @@ class OfertaSolicitud extends Model
                 'hora_inicio',
                 'hora_fin',
                 'estado',
-                'origen',      // ✅ NUEVO
                 'expires_at',
+                'recommended_turno_id',
+                'recommended_reason',
             ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
@@ -63,5 +68,11 @@ class OfertaSolicitud extends Model
     public function profesor()
     {
         return $this->belongsTo(User::class, 'profesor_id', 'id');
+    }
+
+    // ✅ Turno que originó la recomendación (turno cancelado)
+    public function recommendedTurno()
+    {
+        return $this->belongsTo(Turno::class, 'recommended_turno_id', 'id');
     }
 }

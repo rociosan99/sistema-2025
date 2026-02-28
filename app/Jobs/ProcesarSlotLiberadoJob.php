@@ -22,14 +22,15 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
         public string $fecha,       // Y-m-d
         public string $horaInicio,  // H:i:s
         public string $horaFin,     // H:i:s
-        public ?int $excludeAlumnoId = null, // ✅ NUEVO
+        public ?int $excludedAlumnoId = null,
+        public ?int $recommendedTurnoId = null, // ✅ turno cancelado que liberó el slot
     ) {}
 
     public function handle(SolicitudMatchingService $matcher): void
     {
-        $ttlMin = (int) config('matching.offer_ttl_minutes', 30);
+        $ttlMin = (int) config('matching.offer_ttl_minutes', 60);
 
-        // 1) Verificar que el profe realmente esté libre
+        // 1) Confirmar que el profe está libre en ese slot
         $hayChoque = Turno::query()
             ->where('profesor_id', $this->profesorId)
             ->whereDate('fecha', $this->fecha)
@@ -49,18 +50,17 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
             return;
         }
 
-        // 2) Buscar solicitudes activas que encajen en este slot (intersección)
+        // 2) Buscar solicitudes activas que encajen en este slot (solape)
         $solicitudes = SolicitudDisponibilidad::query()
             ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
             ->whereDate('fecha', $this->fecha)
-            ->when($this->excludeAlumnoId, function ($q) {
-                $q->where('alumno_id', '!=', $this->excludeAlumnoId); // ✅ EXCLUIR al que canceló
+            ->when($this->excludedAlumnoId, function ($q) {
+                $q->where('alumno_id', '!=', $this->excludedAlumnoId);
             })
             ->where(function ($q) {
                 $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
             ->where(function ($q) {
-                // solape con el slot liberado
                 $q->where('hora_inicio', '<', $this->horaFin)
                   ->where('hora_fin', '>', $this->horaInicio);
             })
@@ -70,7 +70,7 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
 
         foreach ($solicitudes as $s) {
 
-            // Si la solicitud ya pasó por hora_fin => expirar
+            // Si la solicitud ya pasó -> expirar
             if ($this->solicitudYaPaso($s, $matcher)) {
                 $s->update(['estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA]);
                 continue;
@@ -91,16 +91,15 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
                 continue;
             }
 
-            // 4) Ver si ESTE profesor es compatible para ese slot
-            $candidatos = $matcher->profesoresCompatibles($s, $slotInicio, $slotFin);
-
+            // 4) Ver si ESTE profesor es candidato para ese slot
+            $candidatos  = $matcher->profesoresCompatibles($s, $slotInicio, $slotFin);
             $esCandidato = $candidatos->firstWhere('profesor_id', $this->profesorId);
 
             if (! $esCandidato) {
                 continue;
             }
 
-            // 5) Crear/actualizar oferta por SLOT
+            // 5) Crear/actualizar oferta (y marcar recomendación si corresponde)
             OfertaSolicitud::updateOrCreate(
                 [
                     'solicitud_id' => $s->id,
@@ -109,8 +108,12 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
                     'hora_fin'     => $slotFin,
                 ],
                 [
-                    'estado'     => OfertaSolicitud::ESTADO_PENDIENTE,
-                    'expires_at' => now()->addMinutes($ttlMin),
+                    'estado'              => OfertaSolicitud::ESTADO_PENDIENTE,
+                    'expires_at'          => now()->addMinutes($ttlMin),
+
+                    // ✅ recomendación real (persistida)
+                    'recommended_turno_id' => $this->recommendedTurnoId,
+                    'recommended_reason'   => $this->recommendedTurnoId ? 'slot_liberado_cancelacion' : null,
                 ]
             );
         }
@@ -118,10 +121,9 @@ class ProcesarSlotLiberadoJob implements ShouldQueue
 
     private function solicitudYaPaso(SolicitudDisponibilidad $s, SolicitudMatchingService $matcher): bool
     {
-        $fecha = Carbon::parse($s->fecha)->format('Y-m-d');
+        $fecha  = Carbon::parse($s->fecha)->format('Y-m-d');
         $horaFin = $matcher->normalizarHora((string) $s->hora_fin);
-        $fin = Carbon::parse($fecha . ' ' . $horaFin);
 
-        return $fin->isPast();
+        return Carbon::parse($fecha . ' ' . $horaFin)->isPast();
     }
 }

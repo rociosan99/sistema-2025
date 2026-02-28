@@ -10,13 +10,21 @@ use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class SlotService
 {
     public function obtenerSlotsPorMateria(int $materiaId, Carbon $fecha, ?int $temaId = null): Collection
     {
         $diaSemana = $fecha->dayOfWeekIso; // 1=lunes ... 7=domingo
-        $duracion = (int) (config('turnos.duracion_slot', 60) ?: 60);
+        $duracion  = (int) (config('turnos.duracion_slot', 60) ?: 60);
+
+        // ✅ si la fecha es hoy, no mostrar horarios pasados
+        $ahora = now();
+        $esHoy = $fecha->isSameDay($ahora);
+
+        // ✅ HOLD: si no existe tabla, ignorar sin romper
+        $usaHolds = Schema::hasTable('slot_holds');
 
         // 1) IDs de profes que dictan esa materia
         $profesoresIds = DB::table('profesor_materia')
@@ -78,13 +86,18 @@ class SlotService
             $turnos = Turno::query()
                 ->where('profesor_id', $profesor->id)
                 ->whereDate('fecha', $fecha->toDateString())
-                ->whereIn('estado', ['pendiente', 'aceptado', 'pendiente_pago', 'confirmado'])
+                ->whereIn('estado', [
+                    Turno::ESTADO_PENDIENTE,
+                    Turno::ESTADO_ACEPTADO,
+                    Turno::ESTADO_PENDIENTE_PAGO,
+                    Turno::ESTADO_CONFIRMADO,
+                ])
                 ->get(['hora_inicio', 'hora_fin']);
 
             foreach ($bloques as $bloque) {
 
-                $horaInicioBloque = $fecha->copy()->setTimeFromTimeString($bloque->hora_inicio);
-                $horaFinBloque    = $fecha->copy()->setTimeFromTimeString($bloque->hora_fin);
+                $horaInicioBloque = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_inicio);
+                $horaFinBloque    = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_fin);
 
                 $cursor = $horaInicioBloque->copy();
 
@@ -93,7 +106,16 @@ class SlotService
                     $desde = $cursor->format('H:i:s');
                     $hasta = $cursor->copy()->addMinutes($duracion)->format('H:i:s');
 
-                    // choque con turnos ya reservados
+                    // ✅ HOY: no mostrar slots pasados
+                    if ($esHoy) {
+                        $inicioSlot = Carbon::parse($fecha->toDateString() . ' ' . $desde);
+                        if ($inicioSlot->lte($ahora)) {
+                            $cursor->addMinutes($duracion);
+                            continue;
+                        }
+                    }
+
+                    // 1) choque con turnos ya reservados
                     $hayChoque = $turnos->contains(function (Turno $t) use ($desde, $hasta) {
                         $inicio = $t->hora_inicio instanceof CarbonInterface
                             ? $t->hora_inicio->format('H:i:s')
@@ -106,35 +128,58 @@ class SlotService
                         return $inicio < $hasta && $fin > $desde;
                     });
 
-                    if (! $hayChoque) {
-                        $precioPorHora = $preciosPorProfesor[$profesor->id] ?? null;
-                        $precioTotal   = null;
-
-                        if ($precioPorHora !== null) {
-                            $horas       = $duracion / 60;
-                            $precioTotal = $precioPorHora * $horas;
-                        }
-
-                        $slots->push([
-                            'profesor_id'      => $profesor->id,
-                            'profesor_nombre'  => $nombreCompleto ?: ($profesor->name ?? 'Profesor'),
-                            'fecha'            => $fecha->toDateString(),
-                            'hora_inicio'      => $desde,
-                            'hora_fin'         => $hasta,
-                            'desde'            => substr($desde, 0, 5),
-                            'hasta'            => substr($hasta, 0, 5),
-                            'materia_id'       => $materiaId,
-                            'tema_id'          => $temaId,
-
-                            // ✅ Rating
-                            'rating_avg'       => $ratingAvg,
-                            'rating_count'     => $ratingCnt,
-
-                            // ✅ Precio
-                            'precio_por_hora'  => $precioPorHora,
-                            'precio_total'     => $precioTotal,
-                        ]);
+                    if ($hayChoque) {
+                        $cursor->addMinutes($duracion);
+                        continue;
                     }
+
+                    // ✅ 2) HOLD activo: si existe, NO mostrar en slots generales
+                    if ($usaHolds) {
+                        $holdActivo = DB::table('slot_holds')
+                            ->where('profesor_id', $profesor->id)
+                            ->whereDate('fecha', $fecha->toDateString())
+                            ->where('estado', 'activo')
+                            ->where(function ($q) {
+                                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                            })
+                            ->where(function ($q) use ($desde, $hasta) {
+                                $q->where('hora_inicio', '<', $hasta)
+                                  ->where('hora_fin', '>', $desde);
+                            })
+                            ->exists();
+
+                        if ($holdActivo) {
+                            $cursor->addMinutes($duracion);
+                            continue;
+                        }
+                    }
+
+                    // ✅ OK: slot publicable
+                    $precioPorHora = $preciosPorProfesor[$profesor->id] ?? null;
+                    $precioTotal   = null;
+
+                    if ($precioPorHora !== null) {
+                        $horas       = $duracion / 60;
+                        $precioTotal = $precioPorHora * $horas;
+                    }
+
+                    $slots->push([
+                        'profesor_id'      => $profesor->id,
+                        'profesor_nombre'  => $nombreCompleto ?: ($profesor->name ?? 'Profesor'),
+                        'fecha'            => $fecha->toDateString(),
+                        'hora_inicio'      => $desde,
+                        'hora_fin'         => $hasta,
+                        'desde'            => substr($desde, 0, 5),
+                        'hasta'            => substr($hasta, 0, 5),
+                        'materia_id'       => $materiaId,
+                        'tema_id'          => $temaId,
+
+                        'rating_avg'       => $ratingAvg,
+                        'rating_count'     => $ratingCnt,
+
+                        'precio_por_hora'  => $precioPorHora,
+                        'precio_total'     => $precioTotal,
+                    ]);
 
                     $cursor->addMinutes($duracion);
                 }
@@ -145,7 +190,7 @@ class SlotService
             return $slots;
         }
 
-        // ✅ Orden tipo Uber: mejor rating, más reviews, y después más barato
+        // ✅ Orden tipo Uber
         return $slots
             ->sort(function ($a, $b) {
                 $aAvg = (float) ($a['rating_avg'] ?? 0);

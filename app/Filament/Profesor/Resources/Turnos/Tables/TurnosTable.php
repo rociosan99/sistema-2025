@@ -6,8 +6,14 @@ use App\Models\Turno;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class TurnosTable
 {
@@ -17,6 +23,10 @@ class TurnosTable
             ->columns([
                 TextColumn::make('alumno.name')
                     ->label('Alumno')
+                    ->formatStateUsing(function ($state, Turno $record) {
+                        $nombre = trim(($record->alumno?->name ?? '') . ' ' . ($record->alumno?->apellido ?? ''));
+                        return $nombre !== '' ? $nombre : ($record->alumno?->name ?? '-');
+                    })
                     ->searchable(),
 
                 TextColumn::make('materia.materia_nombre')
@@ -25,7 +35,8 @@ class TurnosTable
 
                 TextColumn::make('fecha')
                     ->label('Fecha')
-                    ->date(),
+                    ->date()
+                    ->sortable(),
 
                 TextColumn::make('hora_inicio')
                     ->label('Desde')
@@ -41,12 +52,11 @@ class TurnosTable
                     ->colors([
                         'warning' => Turno::ESTADO_PENDIENTE,
                         'primary' => Turno::ESTADO_PENDIENTE_PAGO,
-                        'success' => Turno::ESTADO_CONFIRMADO, // pagado
+                        'success' => Turno::ESTADO_CONFIRMADO,
                         'danger'  => Turno::ESTADO_RECHAZADO,
                         'gray'    => Turno::ESTADO_VENCIDO,
                     ])
                     ->formatStateUsing(function ($state, $record) {
-                        // ✅ Regla: si no está pagado/cancelado/rechazado y ya pasó el horario -> vencido
                         if (
                             in_array($state, [Turno::ESTADO_PENDIENTE, Turno::ESTADO_PENDIENTE_PAGO], true)
                             && self::estaVencido($record)
@@ -65,6 +75,73 @@ class TurnosTable
                         };
                     }),
             ])
+
+            // ✅ compacto: arriba pero colapsable (no ocupa media pantalla)
+            ->filtersLayout(FiltersLayout::AboveContentCollapsible)
+
+            // ✅ inputs más angostos
+            ->filtersFormColumns(4)
+
+            ->filters([
+                // 1) Estado
+                Tables\Filters\SelectFilter::make('estado')
+                    ->label('Estado')
+                    ->options([
+                        Turno::ESTADO_PENDIENTE      => 'Pendiente',
+                        Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
+                        Turno::ESTADO_CONFIRMADO     => 'Clase pagada',
+                        Turno::ESTADO_RECHAZADO      => 'Rechazado',
+                        Turno::ESTADO_CANCELADO      => 'Cancelado',
+                        Turno::ESTADO_VENCIDO        => 'Vencido',
+                        Turno::ESTADO_ACEPTADO       => 'Aceptado (legacy)',
+                    ])
+                    ->native(false),
+
+                // 2) Materia
+                Tables\Filters\SelectFilter::make('materia_id')
+                    ->label('Materia')
+                    ->relationship('materia', 'materia_nombre')
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+
+                // 3) Alumno (solo alumnos del profe)
+                Tables\Filters\SelectFilter::make('alumno_id')
+                    ->label('Alumno')
+                    ->options(function () {
+                        $profesorId = Auth::id();
+
+                        $alumnos = DB::table('turnos')
+                            ->join('users', 'users.id', '=', 'turnos.alumno_id')
+                            ->where('turnos.profesor_id', $profesorId)
+                            ->select('users.id', 'users.name', 'users.apellido')
+                            ->distinct()
+                            ->orderBy('users.name')
+                            ->get();
+
+                        return $alumnos->mapWithKeys(function ($u) {
+                            $nombre = trim(($u->name ?? '') . ' ' . ($u->apellido ?? ''));
+                            return [$u->id => ($nombre !== '' ? $nombre : ($u->name ?? 'Alumno'))];
+                        })->toArray();
+                    })
+                    ->searchable()
+                    ->preload()
+                    ->native(false),
+
+                // 4) Fecha (Desde / Hasta) — en 2 inputs chicos
+                Tables\Filters\Filter::make('rango_fechas')
+                    ->label('Fecha')
+                    ->schema([
+                        DatePicker::make('desde')->label('Desde'),
+                        DatePicker::make('hasta')->label('Hasta'),
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        return $query
+                            ->when($data['desde'] ?? null, fn (Builder $q, $desde) => $q->whereDate('fecha', '>=', $desde))
+                            ->when($data['hasta'] ?? null, fn (Builder $q, $hasta) => $q->whereDate('fecha', '<=', $hasta));
+                    }),
+            ])
+
             ->recordActions([
                 Action::make('aceptar')
                     ->label('Aceptar')
@@ -78,9 +155,6 @@ class TurnosTable
                         if (self::estaVencido($record)) {
                             return;
                         }
-
-                        // ✅ FLUJO A:
-                        // El profe acepta -> habilita pago directo
                         $record->update(['estado' => Turno::ESTADO_PENDIENTE_PAGO]);
                     }),
 
@@ -96,22 +170,16 @@ class TurnosTable
                         if (self::estaVencido($record)) {
                             return;
                         }
-
                         $record->update(['estado' => Turno::ESTADO_RECHAZADO]);
                     }),
             ])
             ->paginated();
     }
 
-    /**
-     * ✅ Vencido si ya pasó el fin del turno y NO está en estado final.
-     * (En la tabla igual controlamos por estado, pero esto sirve para visibilidad y jobs)
-     */
     protected static function estaVencido($turno): bool
     {
-        // Si ya está en estado final, NO lo tratamos como vencido
         if (in_array((string) $turno->estado, [
-            Turno::ESTADO_CONFIRMADO, // pagado
+            Turno::ESTADO_CONFIRMADO,
             Turno::ESTADO_CANCELADO,
             Turno::ESTADO_RECHAZADO,
             Turno::ESTADO_VENCIDO,
@@ -125,12 +193,10 @@ class TurnosTable
 
         $horaFinStr = (string) $turno->hora_fin;
 
-        // Si viene con fecha incluida: "2026-01-22 19:00:00"
         if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaFinStr)) {
             $horaFinStr = Carbon::parse($horaFinStr)->format('H:i:s');
         }
 
-        // Si viene "19:00" -> "19:00:00"
         if (preg_match('/^\d{2}:\d{2}$/', $horaFinStr)) {
             $horaFinStr .= ':00';
         }

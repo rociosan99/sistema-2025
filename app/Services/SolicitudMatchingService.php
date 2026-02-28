@@ -7,6 +7,7 @@ use App\Models\SolicitudDisponibilidad;
 use App\Models\Turno;
 use App\Models\User;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -63,7 +64,7 @@ class SolicitudMatchingService
                 Turno::ESTADO_PENDIENTE,
                 Turno::ESTADO_PENDIENTE_PAGO,
                 Turno::ESTADO_CONFIRMADO,
-                Turno::ESTADO_ACEPTADO, // por compatibilidad si aún existe
+                Turno::ESTADO_ACEPTADO, // legacy si existe
             ])
             ->where(function ($q) use ($slotInicio, $slotFin) {
                 // solape: inicio < finSlot AND fin > inicioSlot
@@ -103,8 +104,28 @@ class SolicitudMatchingService
         })->values();
     }
 
+    /**
+     * Normaliza horas a HH:MM:SS
+     * Acepta:
+     * - "10:00"
+     * - "10:00:00"
+     * - "2026-02-12 10:00:00"
+     */
     public function normalizarHora(string $hora): string
     {
-        return preg_match('/^\d{2}:\d{2}$/', $hora) ? $hora . ':00' : $hora;
+        $hora = trim($hora);
+
+        // Si viene con fecha incluida: "YYYY-MM-DD HH:MM:SS"
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2})$/', $hora, $m)) {
+            return $m[1];
+        }
+
+        // Si viene "HH:MM"
+        if (preg_match('/^\d{2}:\d{2}$/', $hora)) {
+            return $hora . ':00';
+        }
+
+        // Si viene "HH:MM:SS" lo dejamos
+        return $hora;
     }
 }
