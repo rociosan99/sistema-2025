@@ -2,6 +2,7 @@
 
 namespace App\Filament\Profesor\Resources\Turnos\Tables;
 
+use App\Mail\ProfesorRespondioTurno;
 use App\Models\Turno;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
@@ -14,6 +15,7 @@ use Filament\Tables\Enums\FiltersLayout;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class TurnosTable
 {
@@ -76,14 +78,10 @@ class TurnosTable
                     }),
             ])
 
-            // ✅ compacto: arriba pero colapsable (no ocupa media pantalla)
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
-
-            // ✅ inputs más angostos
             ->filtersFormColumns(4)
 
             ->filters([
-                // 1) Estado
                 Tables\Filters\SelectFilter::make('estado')
                     ->label('Estado')
                     ->options([
@@ -97,7 +95,6 @@ class TurnosTable
                     ])
                     ->native(false),
 
-                // 2) Materia
                 Tables\Filters\SelectFilter::make('materia_id')
                     ->label('Materia')
                     ->relationship('materia', 'materia_nombre')
@@ -105,7 +102,6 @@ class TurnosTable
                     ->preload()
                     ->native(false),
 
-                // 3) Alumno (solo alumnos del profe)
                 Tables\Filters\SelectFilter::make('alumno_id')
                     ->label('Alumno')
                     ->options(function () {
@@ -128,7 +124,6 @@ class TurnosTable
                     ->preload()
                     ->native(false),
 
-                // 4) Fecha (Desde / Hasta) — en 2 inputs chicos
                 Tables\Filters\Filter::make('rango_fechas')
                     ->label('Fecha')
                     ->schema([
@@ -151,11 +146,18 @@ class TurnosTable
                         $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
-                    ->action(function ($record) {
+                    ->action(function (Turno $record) {
                         if (self::estaVencido($record)) {
                             return;
                         }
+
                         $record->update(['estado' => Turno::ESTADO_PENDIENTE_PAGO]);
+                        $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
+
+                        $emailAlumno = $record->alumno?->email;
+                        if ($emailAlumno) {
+                            Mail::to($emailAlumno)->send(new ProfesorRespondioTurno($record));
+                        }
                     }),
 
                 Action::make('rechazar')
@@ -166,11 +168,18 @@ class TurnosTable
                         $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
-                    ->action(function ($record) {
+                    ->action(function (Turno $record) {
                         if (self::estaVencido($record)) {
                             return;
                         }
+
                         $record->update(['estado' => Turno::ESTADO_RECHAZADO]);
+                        $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
+
+                        $emailAlumno = $record->alumno?->email;
+                        if ($emailAlumno) {
+                            Mail::to($emailAlumno)->send(new ProfesorRespondioTurno($record));
+                        }
                     }),
             ])
             ->paginated();

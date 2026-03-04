@@ -28,6 +28,11 @@ class MercadoPagoController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            // ✅ NUEVO: no permitir pagar un turno cancelado
+            if ($turno->estado === Turno::ESTADO_CANCELADO) {
+                abort(403, 'Este turno está cancelado.');
+            }
+
             if ($turno->estado === Turno::ESTADO_CONFIRMADO) {
                 $audit->log('pago.intento_bloqueado_turno_confirmado', $turno, [
                     'turno_id' => $turno->id,
@@ -44,7 +49,8 @@ class MercadoPagoController extends Controller
 
             if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
 
-                if ($turno->estado !== Turno::ESTADO_CONFIRMADO) {
+                // ✅ NUEVO: si el turno fue cancelado, NO lo volvemos a confirmar
+                if ($turno->estado !== Turno::ESTADO_CANCELADO && $turno->estado !== Turno::ESTADO_CONFIRMADO) {
                     $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
                 }
 
@@ -118,6 +124,14 @@ class MercadoPagoController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            // ✅ NUEVO: no permitir pagar un turno cancelado (desde mail)
+            if ($turno->estado === Turno::ESTADO_CANCELADO) {
+                return view('turnos.confirmacion-resultado', [
+                    'titulo'  => 'No disponible',
+                    'mensaje' => 'Este turno está cancelado.',
+                ]);
+            }
+
             if ($turno->estado === Turno::ESTADO_CONFIRMADO) {
                 $audit->log('pago.mail_intento_bloqueado_turno_confirmado', $turno, [
                     'turno_id' => $turno->id,
@@ -133,7 +147,8 @@ class MercadoPagoController extends Controller
 
             if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
 
-                if ($turno->estado !== Turno::ESTADO_CONFIRMADO) {
+                // ✅ NUEVO: si el turno fue cancelado, NO lo volvemos a confirmar
+                if ($turno->estado !== Turno::ESTADO_CANCELADO && $turno->estado !== Turno::ESTADO_CONFIRMADO) {
                     $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
                 }
 
@@ -414,7 +429,29 @@ class MercadoPagoController extends Controller
             ]);
         }
 
+        // ✅ CAMBIO CLAVE: si llega "approved" pero el turno ya está cancelado,
+        // NO lo volvemos a confirmado.
         if ($status === 'approved') {
+
+            if ($turno->estado === Turno::ESTADO_CANCELADO) {
+
+                if ($audit) {
+                    $audit->log('pago.aprobado_turno_cancelado_no_se_confirma', $turno, [
+                        'turno_id' => $turno->id,
+                        'mp_payment_id' => $paymentId,
+                        'estado_turno' => $turno->estado,
+                        'cancelacion_tipo' => $turno->cancelacion_tipo,
+                        'cancelado_at' => $turno->cancelado_at,
+                    ]);
+                }
+
+                return [
+                    'titulo'  => 'Pago aprobado',
+                    'mensaje' => 'El pago se aprobó, pero el turno ya estaba cancelado. El estado del turno no se modificó.',
+                    'status'  => 'approved',
+                ];
+            }
+
             $estadoAntes = $turno->estado;
             $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
 

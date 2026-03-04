@@ -44,6 +44,7 @@ class TurnoReemplazo extends Model
         'hora_fin' => 'string',
         'expires_at' => 'datetime',
         'meta' => 'array',
+        'notificado_at' => 'datetime',
     ];
 
     /* =========================

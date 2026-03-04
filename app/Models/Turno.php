@@ -13,7 +13,7 @@ use Spatie\Activitylog\LogOptions;
 class Turno extends Model
 {
     use HasFactory;
-    use LogsActivity; // ✅ Auditoría automática
+    use LogsActivity;
 
     protected $table = 'turnos';
 
@@ -22,7 +22,7 @@ class Turno extends Model
     public const ESTADO_ACEPTADO        = 'aceptado'; // legacy
     public const ESTADO_RECHAZADO       = 'rechazado';
     public const ESTADO_PENDIENTE_PAGO  = 'pendiente_pago';
-    public const ESTADO_CONFIRMADO      = 'confirmado'; // pago OK
+    public const ESTADO_CONFIRMADO      = 'confirmado';
     public const ESTADO_CANCELADO       = 'cancelado';
     public const ESTADO_VENCIDO         = 'vencido';
 
@@ -35,8 +35,17 @@ class Turno extends Model
         'hora_inicio',
         'hora_fin',
         'estado',
+
         'precio_por_hora',
         'precio_total',
+
+        // ✅ NUEVOS (cancelación / reemplazo)
+        'cancelado_at',
+        'cancelacion_tipo',            // sin_cargo | con_cargo
+        'reemplazado_por_turno_id',    // si lo estás usando
+
+        // ✅ si lo tenés en DB (por tus dumps)
+        'recordatorio_24h_enviado_at',
 
         // legacy
         'asistencia_confirmada_at',
@@ -47,16 +56,18 @@ class Turno extends Model
         'fecha' => 'date',
         'hora_inicio' => 'string',
         'hora_fin' => 'string',
+
         'precio_por_hora' => 'decimal:2',
         'precio_total' => 'decimal:2',
+
+        // ✅ NUEVOS
+        'cancelado_at' => 'datetime',
+        'recordatorio_24h_enviado_at' => 'datetime',
 
         'asistencia_confirmada_at' => 'datetime',
         'asistencia_cancelada_at' => 'datetime',
     ];
 
-    /* =========================
-     * ✅ Auditoría (Spatie)
-     * ========================= */
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -72,6 +83,13 @@ class Turno extends Model
                 'estado',
                 'precio_por_hora',
                 'precio_total',
+
+                // ✅ NUEVOS
+                'cancelado_at',
+                'cancelacion_tipo',
+                'reemplazado_por_turno_id',
+                'recordatorio_24h_enviado_at',
+
                 'asistencia_confirmada_at',
                 'asistencia_cancelada_at',
             ])
@@ -84,10 +102,7 @@ class Turno extends Model
         return "turno_{$eventName}";
     }
 
-    /* =========================
-     * Relaciones
-     * ========================= */
-
+    // Relaciones
     public function alumno()
     {
         return $this->belongsTo(User::class, 'alumno_id');
@@ -123,37 +138,7 @@ class Turno extends Model
         return $this->hasOne(\App\Models\CalificacionAlumno::class, 'turno_id', 'id');
     }
 
-    /* =========================
-     * Accessors / Helpers
-     * ========================= */
-
-    public function getFechaFormateadaAttribute(): string
-    {
-        return Carbon::parse($this->fecha)->format('d/m/Y');
-    }
-
-    public function getHorarioAttribute(): string
-    {
-        $inicio = $this->hora_inicio ? substr((string) $this->hora_inicio, 0, 5) : '--:--';
-        $fin    = $this->hora_fin ? substr((string) $this->hora_fin, 0, 5) : '--:--';
-
-        return "{$inicio} - {$fin}";
-    }
-
-    public function estaPendiente(): bool
-    {
-        return $this->estado === self::ESTADO_PENDIENTE;
-    }
-
-    public function estaPendientePago(): bool { return $this->estado === self::ESTADO_PENDIENTE_PAGO; }
-    public function estaConfirmado(): bool { return $this->estado === self::ESTADO_CONFIRMADO; }
-    public function estaRechazado(): bool { return $this->estado === self::ESTADO_RECHAZADO; }
-    public function estaCancelado(): bool { return $this->estado === self::ESTADO_CANCELADO; }
-    public function estaVencido(): bool { return $this->estado === self::ESTADO_VENCIDO; }
-
-    /**
-     * ✅ Fecha+hora_inicio
-     */
+    // Helpers
     public function inicioDateTime(): Carbon
     {
         $fechaStr = $this->fecha instanceof Carbon
@@ -173,9 +158,6 @@ class Turno extends Model
         return Carbon::parse("{$fechaStr} {$horaInicioStr}");
     }
 
-    /**
-     * ✅ Fecha+hora_fin
-     */
     public function finDateTime(): Carbon
     {
         $fechaStr = $this->fecha instanceof Carbon
@@ -193,19 +175,5 @@ class Turno extends Model
         }
 
         return Carbon::parse("{$fechaStr} {$horaFinStr}");
-    }
-
-    public function deberiaMarcarseVencido(): bool
-    {
-        if (in_array($this->estado, [
-            self::ESTADO_CONFIRMADO,
-            self::ESTADO_CANCELADO,
-            self::ESTADO_RECHAZADO,
-            self::ESTADO_VENCIDO,
-        ], true)) {
-            return false;
-        }
-
-        return $this->finDateTime()->isPast();
     }
 }

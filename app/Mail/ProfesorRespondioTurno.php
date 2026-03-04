@@ -19,6 +19,8 @@ class ProfesorRespondioTurno extends Mailable
     public function __construct(Turno $turno)
     {
         $this->turno = $turno->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
+
+        // Si tu panel alumno está en otro path, cambiá esta URL:
         $this->urlPanelAlumno = url('/alumno/turnos');
     }
 
@@ -32,7 +34,8 @@ class ProfesorRespondioTurno extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.profesor-respondio-turno',
+            // ✅ Blade en: resources/views/emails/profesor/profesor-respondio-turno.blade.php
+            view: 'emails.profesor.profesor-respondio-turno',
             with: [
                 'turno' => $this->turno,
                 'urlPanelAlumno' => $this->urlPanelAlumno,

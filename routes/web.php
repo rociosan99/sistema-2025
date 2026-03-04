@@ -5,6 +5,7 @@ use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\TurnoCancelarPanelController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\TurnoReemplazoResponderController;
 
 /*
 |--------------------------------------------------------------------------|
@@ -67,5 +68,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/turnos/{turno}/cancelar-panel', TurnoCancelarPanelController::class)
         ->name('turnos.cancelar-panel');
 });
+
+Route::middleware(['web'])
+    ->get('/reemplazos/{turnoReemplazo}/{accion}', TurnoReemplazoResponderController::class)
+    ->name('reemplazos.responder')
+    ->middleware('signed'); // link firmado
+
 
 require __DIR__ . '/auth.php';

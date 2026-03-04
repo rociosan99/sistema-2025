@@ -28,7 +28,7 @@ class ProfesorReemplazoNoConseguido extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.profesor-reemplazo-no-conseguido',
+            view: 'emails.profesor/profesor-reemplazo-no-conseguido',
             with: [
                 'turnoCancelado' => $this->turnoCancelado,
             ],
