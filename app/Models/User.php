@@ -16,6 +16,8 @@ use Illuminate\Notifications\Notifiable;
  * @property string $role
  * @property int|null $carrera_activa_id
  * @property string|null $profile_photo_path
+ * @property string|null $google_id
+ * @property string|null $google_avatar_url
  */
 class User extends Authenticatable implements FilamentUser
 {
@@ -29,6 +31,10 @@ class User extends Authenticatable implements FilamentUser
         'role',
         'carrera_activa_id',
         'profile_photo_path',
+
+        // ✅ Google OAuth
+        'google_id',
+        'google_avatar_url',
     ];
 
     protected $hidden = [
@@ -70,7 +76,7 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /* ==========================
-       RELACIONES PROFESOR (tuyas)
+       RELACIONES PROFESOR
        ========================== */
 
     public function materias()
@@ -129,7 +135,7 @@ class User extends Authenticatable implements FilamentUser
     }
 
     /* ==========================
-       NUEVO: PERFIL ACADÉMICO ALUMNO
+       PERFIL ACADÉMICO ALUMNO
        ========================== */
 
     public function carrerasComoAlumno()

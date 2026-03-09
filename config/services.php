@@ -35,10 +35,17 @@ return [
         ],
     ],
 
-     // ✅ Mercado Pago (Checkout Pro)
+    // ✅ Mercado Pago (Checkout Pro)
     'mercadopago' => [
         'access_token' => env('MERCADOPAGO_ACCESS_TOKEN'),
         'currency' => env('MERCADOPAGO_CURRENCY', 'ARS'),
+    ],
+
+    // ✅ Google OAuth (Socialite)
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
 ];

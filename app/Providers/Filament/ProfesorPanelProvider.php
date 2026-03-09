@@ -8,7 +8,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -36,7 +36,13 @@ class ProfesorPanelProvider extends PanelProvider
                 in: app_path('Filament/Profesor/Pages'),
                 for: 'App\\Filament\\Profesor\\Pages'
             )
-            // ✅ quitamos el Dashboard default de Filament (Escritorio)
+
+            // ✅ Inserta el botón Google debajo del formulario de login
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn () => view('filament.auth.google-button'),
+            )
+
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

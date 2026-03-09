@@ -2,13 +2,14 @@
 
 namespace App\Providers\Filament;
 
-use App\Filament\Alumno\Pages\Dashboard; // ✅ ESTE ES EL IMPORT CORRECTO
+use App\Filament\Alumno\Pages\Dashboard;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -31,8 +32,15 @@ class AlumnoPanelProvider extends PanelProvider
             ->discoverResources(in: app_path('Filament/Alumno/Resources'), for: 'App\\Filament\\Alumno\\Resources')
             ->discoverPages(in: app_path('Filament/Alumno/Pages'), for: 'App\\Filament\\Alumno\\Pages')
             ->pages([
-                Dashboard::class, // ✅ tu dashboard custom con lógica de calificaciones
+                Dashboard::class,
             ])
+
+            // ✅ Inserta el botón Google debajo del formulario de login
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
+                fn () => view('filament.auth.google-button'),
+            )
+
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,

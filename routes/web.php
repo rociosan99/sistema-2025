@@ -3,9 +3,10 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\TurnoCancelarPanelController;
+use App\Http\Controllers\TurnoReemplazoResponderController;
+use App\Http\Controllers\Auth\GoogleAuthController; // ✅ GOOGLE
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\TurnoReemplazoResponderController;
 
 /*
 |--------------------------------------------------------------------------|
@@ -26,6 +27,14 @@ Route::get('/', function () {
 
     return view('welcome');
 });
+
+/*
+|--------------------------------------------------------------------------|
+| ✅ Google OAuth
+|--------------------------------------------------------------------------|
+*/
+Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback'])->name('auth.google.callback');
 
 /*
 |--------------------------------------------------------------------------|
@@ -73,6 +82,5 @@ Route::middleware(['web'])
     ->get('/reemplazos/{turnoReemplazo}/{accion}', TurnoReemplazoResponderController::class)
     ->name('reemplazos.responder')
     ->middleware('signed'); // link firmado
-
 
 require __DIR__ . '/auth.php';
