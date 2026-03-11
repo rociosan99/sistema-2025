@@ -18,7 +18,6 @@ class TurnoCancelarPanelController extends Controller
             abort(403);
         }
 
-        // Si ya pasó la clase -> finalizada
         if ($turno->finDateTime()->isPast()) {
             $estadoAntes = (string) $turno->estado;
             $turno->update(['estado' => Turno::ESTADO_VENCIDO]);
@@ -33,7 +32,6 @@ class TurnoCancelarPanelController extends Controller
             return back()->with('error', 'La clase ya finalizó.');
         }
 
-        // Permitir cancelar incluso pagada
         if (! in_array($turno->estado, [
             Turno::ESTADO_PENDIENTE,
             Turno::ESTADO_ACEPTADO,
@@ -50,12 +48,10 @@ class TurnoCancelarPanelController extends Controller
         $estadoAntes = (string) $turno->estado;
         $alumnoId    = (int) $turno->alumno_id;
 
-        // ✅ Regla 24 horas
         $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
         $horasHastaInicio = now()->diffInHours($turno->inicioDateTime(), false);
         $tipoCancelacion = $horasHastaInicio >= $horasRegla ? 'sin_cargo' : 'con_cargo';
 
-        // Hold / ventana de reemplazo
         $replacementWindowMin = (int) config('matching.replacement_window_minutes', 60);
 
         DB::transaction(function () use (
@@ -74,24 +70,25 @@ class TurnoCancelarPanelController extends Controller
                 'cancelacion_tipo' => $tipoCancelacion,
             ]);
 
-            // ✅ HOLD: bloquear que se publique en slots generales por X minutos
-            SlotHold::create([
-                'profesor_id' => $profesorId,
-                'fecha'       => $fecha,
-                'hora_inicio' => $horaInicio,
-                'hora_fin'    => $horaFin,
-                'motivo'      => 'reemplazo',
-                'estado'      => SlotHold::ESTADO_ACTIVO,
-                'expires_at'  => now()->addMinutes($replacementWindowMin),
-                'meta'        => [
-                    'turno_cancelado_id' => $turno->id,
-                    'alumno_cancelador_id' => $alumnoId,
-                    'cancelacion_tipo' => $tipoCancelacion,
-                ],
-            ]);
+            // ✅ Solo con_cargo hacemos hold
+            if ($tipoCancelacion === 'con_cargo') {
+                SlotHold::create([
+                    'profesor_id' => $profesorId,
+                    'fecha'       => $fecha,
+                    'hora_inicio' => $horaInicio,
+                    'hora_fin'    => $horaFin,
+                    'motivo'      => 'reemplazo',
+                    'estado'      => SlotHold::ESTADO_ACTIVO,
+                    'expires_at'  => now()->addMinutes($replacementWindowMin),
+                    'meta'        => [
+                        'turno_cancelado_id' => $turno->id,
+                        'alumno_cancelador_id' => $alumnoId,
+                        'cancelacion_tipo' => $tipoCancelacion,
+                    ],
+                ]);
+            }
         });
 
-        // Auditoría
         $audit->log('turno.cancelado_alumno', $turno, [
             'turno_id' => $turno->id,
             'alumno_id' => $alumnoId,
@@ -104,23 +101,22 @@ class TurnoCancelarPanelController extends Controller
             'cancelacion_tipo' => $tipoCancelacion,
         ]);
 
-        // ✅ Nuevo flujo B: buscar reemplazo SIEMPRE (tanto sin_cargo como con_cargo)
-        dispatch(new ProcesarReemplazoTurnoCanceladoJob(
-            turnoCanceladoId: (int) $turno->id,
-            excludedAlumnoId: (int) $alumnoId
-        ));
+        // ✅ Solo con_cargo disparamos reemplazo
+        if ($tipoCancelacion === 'con_cargo') {
+            dispatch(new ProcesarReemplazoTurnoCanceladoJob(
+                turnoCanceladoId: (int) $turno->id,
+                excludedAlumnoId: (int) $alumnoId
+            ));
 
-        $audit->log('reemplazo.turno_cancelado_disparado', $turno, [
-            'turno_id' => $turno->id,
-            'job' => ProcesarReemplazoTurnoCanceladoJob::class,
-            'cancelacion_tipo' => $tipoCancelacion,
-        ]);
+            $audit->log('reemplazo.turno_cancelado_disparado', $turno, [
+                'turno_id' => $turno->id,
+                'job' => ProcesarReemplazoTurnoCanceladoJob::class,
+                'cancelacion_tipo' => $tipoCancelacion,
+            ]);
 
-        // Mensaje al alumno: si sin cargo, sugerimos reprogramar (solo UI)
-        $msg = $tipoCancelacion === 'sin_cargo'
-            ? 'Clase cancelada sin cargo. Podés reprogramar. Se buscará un reemplazo para el profesor.'
-            : 'Clase cancelada. Se buscará un reemplazo (cancelación cercana al horario).';
+            return back()->with('success', 'Clase cancelada con cargo. Se buscará un reemplazo.');
+        }
 
-        return back()->with('success', $msg);
+        return back()->with('success', 'Clase cancelada sin cargo. Si querés, podés reprogramar desde el botón Reprogramar.');
     }
 }

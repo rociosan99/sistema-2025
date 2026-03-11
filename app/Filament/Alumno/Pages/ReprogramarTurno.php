@@ -1,0 +1,219 @@
+<?php
+
+namespace App\Filament\Alumno\Pages;
+
+use App\Mail\ProfesorTurnoReprogramado;
+use App\Models\Turno;
+use App\Services\SlotService;
+use BackedEnum;
+use Carbon\Carbon;
+use Filament\Notifications\Notification;
+use Filament\Pages\Page;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
+
+class ReprogramarTurno extends Page
+{
+    // ✅ No mostrar en menú lateral
+    protected static bool $shouldRegisterNavigation = false;
+
+    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-calendar-days';
+    protected static ?string $navigationLabel = 'Reprogramar turno';
+    protected static ?string $title = 'Reprogramar turno';
+    protected static ?string $slug = 'reprogramar-turno';
+    protected string $view = 'filament.alumno.pages.reprogramar-turno';
+
+    public ?Turno $turnoOriginal = null;
+
+    public ?string $fecha = null;
+    public array $slots = [];
+    public ?string $errorMensaje = null;
+
+    protected SlotService $slotService;
+
+    public function boot(SlotService $slotService): void
+    {
+        $this->slotService = $slotService;
+    }
+
+    public function mount(): void
+    {
+        $turnoId = (int) request()->query('turno', 0);
+
+        if ($turnoId <= 0) {
+            $this->errorMensaje = 'Falta el parámetro "turno" en la URL.';
+            return;
+        }
+
+        $turno = Turno::with(['profesor', 'materia', 'tema'])->find($turnoId);
+
+        if (! $turno) {
+            $this->errorMensaje = 'El turno no existe.';
+            return;
+        }
+
+        if ((int) $turno->alumno_id !== (int) Auth::id()) {
+            abort(403);
+        }
+
+        if ($turno->inicioDateTime()->isPast()) {
+            $this->errorMensaje = 'No podés reprogramar una clase que ya empezó o pasó.';
+            return;
+        }
+
+        if (! in_array((string) $turno->estado, [
+            Turno::ESTADO_PENDIENTE,
+            Turno::ESTADO_PENDIENTE_PAGO,
+            Turno::ESTADO_CONFIRMADO,
+        ], true)) {
+            $this->errorMensaje = 'Este turno no se puede reprogramar.';
+            return;
+        }
+
+        // ✅ Regla >= 24h
+        $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
+        $horasHastaInicio = now()->diffInHours($turno->inicioDateTime(), false);
+
+        if ($horasHastaInicio < $horasRegla) {
+            $this->errorMensaje = 'Solo podés reprogramar con al menos 24 horas de anticipación.';
+            return;
+        }
+
+        $this->turnoOriginal = $turno;
+    }
+
+    public function consultar(): void
+    {
+        if (! $this->turnoOriginal) {
+            throw ValidationException::withMessages([
+                'turno' => $this->errorMensaje ?? 'No se pudo cargar el turno.',
+            ]);
+        }
+
+        if (! $this->fecha) {
+            throw ValidationException::withMessages(['fecha' => 'Seleccioná una fecha.']);
+        }
+
+        $fecha = Carbon::createFromFormat('Y-m-d', $this->fecha);
+
+        if ($fecha->isPast() && ! $fecha->isToday()) {
+            throw ValidationException::withMessages(['fecha' => 'No podés elegir fechas pasadas.']);
+        }
+
+        $this->slots = $this->slotService
+            ->obtenerSlotsPorMateria(
+                (int) $this->turnoOriginal->materia_id,
+                $fecha,
+                $this->turnoOriginal->tema_id ? (int) $this->turnoOriginal->tema_id : null
+            )
+            ->toArray();
+    }
+
+    public function reprogramar(int $index): void
+    {
+        if (! $this->turnoOriginal) {
+            throw ValidationException::withMessages([
+                'turno' => $this->errorMensaje ?? 'No se pudo cargar el turno.',
+            ]);
+        }
+
+        if (! isset($this->slots[$index])) {
+            throw ValidationException::withMessages(['slot' => 'Horario inválido.']);
+        }
+
+        $slot = $this->slots[$index];
+
+        // ✅ Guardar ids para mail fuera de la transacción
+        $turnoOriginalId = $this->turnoOriginal->id;
+        $nuevoTurnoId = null;
+
+        DB::transaction(function () use ($slot, &$nuevoTurnoId) {
+
+            // ✅ Revalidar regla >=24h
+            $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
+            $horasHastaInicio = now()->diffInHours($this->turnoOriginal->inicioDateTime(), false);
+            if ($horasHastaInicio < $horasRegla) {
+                throw ValidationException::withMessages([
+                    'turno' => 'Ya no se puede reprogramar (faltan menos de 24 horas).',
+                ]);
+            }
+
+            // ✅ Anti-choque
+            $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
+                ->whereDate('fecha', $slot['fecha'])
+                ->where(function ($q) use ($slot) {
+                    $q->where('hora_inicio', '<', $slot['hora_fin'])
+                      ->where('hora_fin', '>', $slot['hora_inicio']);
+                })
+                ->whereIn('estado', [
+                    Turno::ESTADO_PENDIENTE,
+                    Turno::ESTADO_ACEPTADO,
+                    Turno::ESTADO_PENDIENTE_PAGO,
+                    Turno::ESTADO_CONFIRMADO,
+                ])
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hayChoque) {
+                throw ValidationException::withMessages([
+                    'slot' => 'Ese horario ya no está disponible.',
+                ]);
+            }
+
+            // ✅ Si el original estaba pagado, el nuevo queda confirmado
+            $estadoNuevo = $this->turnoOriginal->estado === Turno::ESTADO_CONFIRMADO
+                ? Turno::ESTADO_CONFIRMADO
+                : Turno::ESTADO_PENDIENTE_PAGO;
+
+            // ✅ Crear turno nuevo
+            $nuevo = Turno::create([
+                'alumno_id'       => $this->turnoOriginal->alumno_id,
+                'profesor_id'     => $slot['profesor_id'],
+                'materia_id'      => $this->turnoOriginal->materia_id,
+                'tema_id'         => $this->turnoOriginal->tema_id,
+                'fecha'           => $slot['fecha'],
+                'hora_inicio'     => $slot['hora_inicio'],
+                'hora_fin'        => $slot['hora_fin'],
+                'estado'          => $estadoNuevo,
+                'precio_por_hora' => $slot['precio_por_hora'] ?? $this->turnoOriginal->precio_por_hora,
+                'precio_total'    => $slot['precio_total'] ?? $this->turnoOriginal->precio_total,
+            ]);
+
+            $nuevoTurnoId = $nuevo->id;
+
+            $this->turnoOriginal->refresh();
+
+            // ✅ Cancelar original (sin cargo) y linkear al nuevo
+            $this->turnoOriginal->update([
+                'estado' => Turno::ESTADO_CANCELADO,
+                'cancelado_at' => now(),
+                'cancelacion_tipo' => 'sin_cargo',
+                'reprogramado_por_turno_id' => $nuevo->id,
+                'reprogramado_at' => now(),
+            ]);
+        });
+
+        // ✅ Enviar mail al profesor (fuera de la transacción)
+        $turnoOriginal = Turno::with(['profesor','alumno','materia','tema'])->find($turnoOriginalId);
+        $turnoNuevo = $nuevoTurnoId
+            ? Turno::with(['profesor','alumno','materia','tema'])->find($nuevoTurnoId)
+            : null;
+
+        if ($turnoOriginal && $turnoNuevo && $turnoNuevo->profesor?->email) {
+            Mail::to($turnoNuevo->profesor->email)
+                ->send(new ProfesorTurnoReprogramado($turnoOriginal, $turnoNuevo));
+        }
+
+        Notification::make()
+            ->title('Turno reprogramado')
+            ->body('Se creó un nuevo turno con el nuevo horario.')
+            ->success()
+            ->send();
+
+        if ($this->fecha) {
+            $this->consultar();
+        }
+    }
+}

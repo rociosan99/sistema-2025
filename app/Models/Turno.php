@@ -39,12 +39,16 @@ class Turno extends Model
         'precio_por_hora',
         'precio_total',
 
-        // ✅ NUEVOS (cancelación / reemplazo)
+        // ✅ cancelación / reemplazo
         'cancelado_at',
-        'cancelacion_tipo',            // sin_cargo | con_cargo
-        'reemplazado_por_turno_id',    // si lo estás usando
+        'cancelacion_tipo',
+        'reemplazado_por_turno_id',
 
-        // ✅ si lo tenés en DB (por tus dumps)
+        // ✅ reprogramación
+        'reprogramado_por_turno_id',
+        'reprogramado_at',
+
+        // ✅ si lo tenés en DB
         'recordatorio_24h_enviado_at',
 
         // legacy
@@ -60,9 +64,11 @@ class Turno extends Model
         'precio_por_hora' => 'decimal:2',
         'precio_total' => 'decimal:2',
 
-        // ✅ NUEVOS
         'cancelado_at' => 'datetime',
         'recordatorio_24h_enviado_at' => 'datetime',
+
+        // ✅ reprogramación
+        'reprogramado_at' => 'datetime',
 
         'asistencia_confirmada_at' => 'datetime',
         'asistencia_cancelada_at' => 'datetime',
@@ -84,11 +90,14 @@ class Turno extends Model
                 'precio_por_hora',
                 'precio_total',
 
-                // ✅ NUEVOS
                 'cancelado_at',
                 'cancelacion_tipo',
                 'reemplazado_por_turno_id',
                 'recordatorio_24h_enviado_at',
+
+                // ✅ reprogramación
+                'reprogramado_por_turno_id',
+                'reprogramado_at',
 
                 'asistencia_confirmada_at',
                 'asistencia_cancelada_at',
@@ -136,6 +145,12 @@ class Turno extends Model
     public function calificacionAlumno()
     {
         return $this->hasOne(\App\Models\CalificacionAlumno::class, 'turno_id', 'id');
+    }
+
+    // ✅ Reprogramación: turno original -> turno nuevo
+    public function turnoReprogramado()
+    {
+        return $this->belongsTo(self::class, 'reprogramado_por_turno_id');
     }
 
     // Helpers
