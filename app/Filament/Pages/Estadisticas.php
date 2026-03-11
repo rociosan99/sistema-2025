@@ -6,7 +6,6 @@ use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
-
 class Estadisticas extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-chart-bar';
@@ -18,7 +17,7 @@ class Estadisticas extends Page
     protected string $view = 'filament.pages.estadisticas';
 
     public ?string $fechaInicio = null;
-    public ?string $fechaFin    = null;
+    public ?string $fechaFin = null;
 
     // Debug (se mantiene por si querés usarlo, pero NO se muestra en la vista)
     public int $debugTotalTurnosEnRango = 0;
@@ -38,6 +37,16 @@ class Estadisticas extends Page
     public array $temas = [];
     public array $temasChartLabels = [];
     public array $temasChartSolicitados = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $estados = [];
+    public array $estadosChartLabels = [];
+    public array $estadosChartTotales = [];
+
+    /** @var array<int, array<string, mixed>> */
+    public array $profesores = [];
+    public array $profesoresChartLabels = [];
+    public array $profesoresChartConfirmados = [];
 
     public function mount(): void
     {
@@ -106,9 +115,7 @@ class Estadisticas extends Page
         $this->materiasChartLabels = $topMaterias->pluck('materia')->values()->all();
         $this->materiasChartSolicitados = $topMaterias->pluck('solicitados')->map(fn ($v) => (int) $v)->values()->all();
 
-        /**
-         * ✅ 2) Temas (en vez de "Sin tema", usamos "Temas de {Materia}")
-         */
+        // 2) Temas
         $temas = DB::table('turnos as t')
             ->join('materias as m', 'm.materia_id', '=', 't.materia_id')
             ->leftJoin('temas as te', 'te.tema_id', '=', 't.tema_id')
@@ -137,7 +144,69 @@ class Estadisticas extends Page
             ->values()
             ->all();
 
-        // ✅ evento para re-render del chart
+        // 3) Turnos por estado
+        $estados = DB::table('turnos')
+            ->selectRaw("
+                estado,
+                COUNT(*) as total
+            ")
+            ->whereBetween('fecha', [$desde, $hasta])
+            ->groupBy('estado')
+            ->orderByDesc('total')
+            ->get();
+
+        $this->estados = $estados->map(fn ($r) => [
+            'estado' => (string) $r->estado,
+            'total' => (int) $r->total,
+        ])->all();
+
+        $this->estadosChartLabels = $estados
+            ->pluck('estado')
+            ->map(fn ($v) => (string) $v)
+            ->values()
+            ->all();
+
+        $this->estadosChartTotales = $estados
+            ->pluck('total')
+            ->map(fn ($v) => (int) $v)
+            ->values()
+            ->all();
+
+        // 4) Profesores con más clases confirmadas
+        $profesores = DB::table('turnos as t')
+            ->join('users as u', 'u.id', '=', 't.profesor_id')
+            ->selectRaw("
+                u.id,
+                CONCAT(u.name, ' ', COALESCE(u.apellido, '')) as profesor,
+                u.email,
+                COUNT(*) as confirmados
+            ")
+            ->where('u.role', 'profesor')
+            ->where('t.estado', 'confirmado')
+            ->whereBetween('t.fecha', [$desde, $hasta])
+            ->groupBy('u.id', 'u.name', 'u.apellido', 'u.email')
+            ->orderByDesc('confirmados')
+            ->get();
+
+        $this->profesores = $profesores->map(fn ($r) => [
+            'profesor' => trim((string) $r->profesor),
+            'email' => (string) $r->email,
+            'confirmados' => (int) $r->confirmados,
+        ])->all();
+
+        $topProfesores = $profesores->take(10);
+
+        $this->profesoresChartLabels = $topProfesores
+            ->map(fn ($r) => trim((string) $r->profesor))
+            ->values()
+            ->all();
+
+        $this->profesoresChartConfirmados = $topProfesores
+            ->pluck('confirmados')
+            ->map(fn ($v) => (int) $v)
+            ->values()
+            ->all();
+
         $this->dispatch('estadisticas-actualizadas');
     }
 }

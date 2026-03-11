@@ -8,7 +8,7 @@
                 <div>
                     <div style="font-size:18px; font-weight:900;">Estadísticas</div>
                     <div style="font-size:13px; color:#6b7280; margin-top:4px;">
-                        Turnos por Materia / Tema en el rango seleccionado.
+                        Turnos por Materia / Tema / Estado / Profesores en el rango seleccionado.
                     </div>
                 </div>
 
@@ -90,7 +90,6 @@
                 Turnos por Materia (Top 10 por solicitudes)
             </div>
 
-            {{-- Data para JS --}}
             <div
                 id="chartDataMaterias"
                 data-labels='@json($this->materiasChartLabels)'
@@ -123,7 +122,9 @@
                                 <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['vencidos'] }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" style="padding:10px; color:#6b7280;">Sin datos.</td></tr>
+                            <tr>
+                                <td colspan="5" style="padding:10px; color:#6b7280;">Sin datos.</td>
+                            </tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -136,7 +137,6 @@
                 Turnos por Tema (Top 10 por solicitudes)
             </div>
 
-            {{-- Data para JS --}}
             <div
                 id="chartDataTemas"
                 data-labels='@json($this->temasChartLabels)'
@@ -169,7 +169,93 @@
                                 <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['vencidos'] }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="5" style="padding:10px; color:#6b7280;">Sin datos.</td></tr>
+                            <tr>
+                                <td colspan="5" style="padding:10px; color:#6b7280;">Sin datos.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- Estados --}}
+        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
+            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">
+                Turnos por Estado
+            </div>
+
+            <div
+                id="chartDataEstados"
+                data-labels='@json($this->estadosChartLabels)'
+                data-values='@json($this->estadosChartTotales)'
+                style="display:none;"
+            ></div>
+
+            <div wire:ignore>
+                <canvas id="chartEstados" style="max-width:100%; height:320px;"></canvas>
+            </div>
+
+            <div style="margin-top:16px; overflow:auto;">
+                <table style="width:100%; border-collapse:collapse; min-width:760px;">
+                    <thead>
+                        <tr style="background:#111827; color:#fff;">
+                            <th style="text-align:left; padding:10px;">Estado</th>
+                            <th style="text-align:right; padding:10px;">Cantidad</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($this->estados as $row)
+                            <tr>
+                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['estado'] }}</td>
+                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['total'] }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="2" style="padding:10px; color:#6b7280;">Sin datos.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {{-- Profesores --}}
+        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
+            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">
+                Profesores con más clases confirmadas
+            </div>
+
+            <div
+                id="chartDataProfesores"
+                data-labels='@json($this->profesoresChartLabels)'
+                data-values='@json($this->profesoresChartConfirmados)'
+                style="display:none;"
+            ></div>
+
+            <div wire:ignore>
+                <canvas id="chartProfesores" style="max-width:100%; height:320px;"></canvas>
+            </div>
+
+            <div style="margin-top:16px; overflow:auto;">
+                <table style="width:100%; border-collapse:collapse; min-width:760px;">
+                    <thead>
+                        <tr style="background:#111827; color:#fff;">
+                            <th style="text-align:left; padding:10px;">Profesor</th>
+                            <th style="text-align:left; padding:10px;">Email</th>
+                            <th style="text-align:right; padding:10px;">Clases confirmadas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($this->profesores as $row)
+                            <tr>
+                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['profesor'] }}</td>
+                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['email'] }}</td>
+                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['confirmados'] }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="3" style="padding:10px; color:#6b7280;">Sin datos.</td>
+                            </tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -196,10 +282,14 @@
 
         function renderCharts() {
             const materias = readChartData('chartDataMaterias');
-            const temas    = readChartData('chartDataTemas');
+            const temas = readChartData('chartDataTemas');
+            const estados = readChartData('chartDataEstados');
+            const profesores = readChartData('chartDataProfesores');
 
             if (window._chartMaterias) window._chartMaterias.destroy();
             if (window._chartTemas) window._chartTemas.destroy();
+            if (window._chartEstados) window._chartEstados.destroy();
+            if (window._chartProfesores) window._chartProfesores.destroy();
 
             const cM = document.getElementById('chartMaterias');
             if (cM) {
@@ -215,7 +305,12 @@
                             borderWidth: 1
                         }]
                     },
-                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
                 });
             }
 
@@ -233,7 +328,58 @@
                             borderWidth: 1
                         }]
                     },
-                    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+
+            const cE = document.getElementById('chartEstados');
+            if (cE) {
+                window._chartEstados = new Chart(cE.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: estados.labels,
+                        datasets: [{
+                            label: 'Cantidad',
+                            data: estados.values,
+                            backgroundColor: 'rgba(249, 115, 22, 0.5)',
+                            borderColor: 'rgba(249, 115, 22, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            }
+
+            const cP = document.getElementById('chartProfesores');
+            if (cP) {
+                window._chartProfesores = new Chart(cP.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: profesores.labels,
+                        datasets: [{
+                            label: 'Clases confirmadas',
+                            data: profesores.values,
+                            backgroundColor: 'rgba(168, 85, 247, 0.5)',
+                            borderColor: 'rgba(168, 85, 247, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
                 });
             }
         }
