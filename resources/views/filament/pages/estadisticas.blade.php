@@ -12,8 +12,19 @@
                     </div>
                 </div>
 
-                <div style="font-size:12px; color:#374151; background:#f9fafb; border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px;">
-                    {{ $this->fechaInicio }} → {{ $this->fechaFin }}
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <x-filament::button
+                        tag="a"
+                        :href="\App\Filament\Pages\OptimizacionPrecios::getUrl()"
+                        color="success"
+                        icon="heroicon-o-currency-dollar"
+                    >
+                        Ver optimización de precios
+                    </x-filament::button>
+
+                    <div style="font-size:12px; color:#374151; background:#f9fafb; border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px;">
+                        {{ $this->fechaInicio }} → {{ $this->fechaFin }}
+                    </div>
                 </div>
             </div>
         </div>
