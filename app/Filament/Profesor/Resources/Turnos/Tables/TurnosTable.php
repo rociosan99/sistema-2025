@@ -4,14 +4,15 @@ namespace App\Filament\Profesor\Resources\Turnos\Tables;
 
 use App\Mail\ProfesorRespondioTurno;
 use App\Models\Turno;
+use App\Services\AuditLogger;
 use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -151,8 +152,27 @@ class TurnosTable
                             return;
                         }
 
-                        $record->update(['estado' => Turno::ESTADO_PENDIENTE_PAGO]);
+                        /** @var AuditLogger $audit */
+                        $audit = app(AuditLogger::class);
+
+                        $estadoAntes = (string) $record->estado;
+
+                        $record->update([
+                            'estado' => Turno::ESTADO_PENDIENTE_PAGO,
+                        ]);
+
                         $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
+
+                        $audit->log('turno.aceptado_profesor', $record, [
+                            'turno_id' => $record->id,
+                            'profesor_id' => $record->profesor_id,
+                            'alumno_id' => $record->alumno_id,
+                            'estado_anterior' => $estadoAntes,
+                            'estado_nuevo' => Turno::ESTADO_PENDIENTE_PAGO,
+                            'fecha' => (string) $record->fecha,
+                            'hora_inicio' => (string) $record->hora_inicio,
+                            'hora_fin' => (string) $record->hora_fin,
+                        ]);
 
                         $emailAlumno = $record->alumno?->email;
                         if ($emailAlumno) {
@@ -173,8 +193,27 @@ class TurnosTable
                             return;
                         }
 
-                        $record->update(['estado' => Turno::ESTADO_RECHAZADO]);
+                        /** @var AuditLogger $audit */
+                        $audit = app(AuditLogger::class);
+
+                        $estadoAntes = (string) $record->estado;
+
+                        $record->update([
+                            'estado' => Turno::ESTADO_RECHAZADO,
+                        ]);
+
                         $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
+
+                        $audit->log('turno.rechazado_profesor', $record, [
+                            'turno_id' => $record->id,
+                            'profesor_id' => $record->profesor_id,
+                            'alumno_id' => $record->alumno_id,
+                            'estado_anterior' => $estadoAntes,
+                            'estado_nuevo' => Turno::ESTADO_RECHAZADO,
+                            'fecha' => (string) $record->fecha,
+                            'hora_inicio' => (string) $record->hora_inicio,
+                            'hora_fin' => (string) $record->hora_fin,
+                        ]);
 
                         $emailAlumno = $record->alumno?->email;
                         if ($emailAlumno) {
