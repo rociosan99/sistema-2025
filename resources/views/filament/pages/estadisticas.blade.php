@@ -15,6 +15,15 @@
                 <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                     <x-filament::button
                         tag="a"
+                        :href="\App\Filament\Pages\Reportes::getUrl()"
+                        color="info"
+                        icon="heroicon-o-document-text"
+                    >
+                        Ver reportes
+                    </x-filament::button>
+
+                    <x-filament::button
+                        tag="a"
                         :href="\App\Filament\Pages\OptimizacionPrecios::getUrl()"
                         color="success"
                         icon="heroicon-o-currency-dollar"

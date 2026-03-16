@@ -7,6 +7,10 @@ use App\Http\Controllers\TurnoReemplazoResponderController;
 use App\Http\Controllers\Auth\GoogleAuthController; // ✅ GOOGLE
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\ReporteTurnosPdfController;
+use App\Http\Controllers\ReporteTurnosExcelController;
+
+
 
 /*
 |--------------------------------------------------------------------------|
@@ -76,6 +80,16 @@ Route::post('/webhooks/mercadopago', [MercadoPagoController::class, 'webhook'])
 Route::middleware(['auth'])->group(function () {
     Route::post('/turnos/{turno}/cancelar-panel', TurnoCancelarPanelController::class)
         ->name('turnos.cancelar-panel');
+});
+
+
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/reportes/turnos/pdf', ReporteTurnosPdfController::class)
+        ->name('reportes.turnos.pdf');
+
+    Route::get('/reportes/turnos/excel', ReporteTurnosExcelController::class)
+        ->name('reportes.turnos.excel');
 });
 
 Route::middleware(['web'])
