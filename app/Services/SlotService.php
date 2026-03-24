@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CalificacionProfesor;
 use App\Models\Disponibilidad;
+use App\Models\SlotHold;
 use App\Models\Turno;
 use App\Models\User;
 use Carbon\Carbon;
@@ -17,21 +18,19 @@ class SlotService
     public function obtenerSlotsPorMateria(int $materiaId, Carbon $fecha, ?int $temaId = null): Collection
     {
         $diaSemana = $fecha->dayOfWeekIso; // 1=lunes ... 7=domingo
-        $duracion  = (int) (config('turnos.duracion_slot', 60) ?: 60);
+        $duracion = (int) (config('turnos.duracion_slot', 60) ?: 60);
 
         $ahora = now();
         $esHoy = $fecha->isSameDay($ahora);
 
         $usaHolds = Schema::hasTable('slot_holds');
 
-        // 1) IDs de profes activos que dictan esa materia
         $profesoresQuery = DB::table('profesor_materia as pm')
             ->join('users as u', 'u.id', '=', 'pm.profesor_id')
             ->where('pm.materia_id', $materiaId)
             ->where('u.role', 'profesor')
             ->where('u.activo', true);
 
-        // Si viene tema, también filtrar por profesores que tengan ese tema
         if ($temaId) {
             $profesoresQuery->join('profesor_tema as pt', 'pt.profesor_id', '=', 'pm.profesor_id')
                 ->where('pt.tema_id', $temaId);
@@ -47,7 +46,6 @@ class SlotService
             return collect();
         }
 
-        // 2) Profesores activos
         $profesores = User::query()
             ->whereIn('id', $profesoresIds)
             ->where('role', 'profesor')
@@ -58,14 +56,12 @@ class SlotService
             return collect();
         }
 
-        // 3) Precios desde pivot (por profe)
         $preciosPorProfesor = DB::table('profesor_materia')
             ->where('materia_id', $materiaId)
             ->whereIn('profesor_id', $profesores->pluck('id')->all())
             ->pluck('precio_por_hora', 'profesor_id')
             ->toArray();
 
-        // 4) Ratings por profe
         $ratings = CalificacionProfesor::query()
             ->selectRaw('profesor_id, AVG(estrellas) as avg_estrellas, COUNT(*) as cant')
             ->whereIn('profesor_id', $profesores->pluck('id')->all())
@@ -82,7 +78,6 @@ class SlotService
 
             $nombreCompleto = trim(($profesor->name ?? '') . ' ' . ($profesor->apellido ?? ''));
 
-            // Disponibilidades del día
             $bloques = Disponibilidad::query()
                 ->where('profesor_id', $profesor->id)
                 ->where('dia_semana', $diaSemana)
@@ -92,7 +87,6 @@ class SlotService
                 continue;
             }
 
-            // Turnos ocupados
             $turnos = Turno::query()
                 ->where('profesor_id', $profesor->id)
                 ->whereDate('fecha', $fecha->toDateString())
@@ -106,7 +100,7 @@ class SlotService
 
             foreach ($bloques as $bloque) {
                 $horaInicioBloque = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_inicio);
-                $horaFinBloque    = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_fin);
+                $horaFinBloque = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_fin);
 
                 $cursor = $horaInicioBloque->copy();
 
@@ -114,7 +108,6 @@ class SlotService
                     $desde = $cursor->format('H:i:s');
                     $hasta = $cursor->copy()->addMinutes($duracion)->format('H:i:s');
 
-                    // Si la fecha es hoy, no mostrar horarios pasados
                     if ($esHoy) {
                         $inicioSlot = Carbon::parse($fecha->toDateString() . ' ' . $desde);
 
@@ -124,7 +117,6 @@ class SlotService
                         }
                     }
 
-                    // Choque con turnos reservados
                     $hayChoque = $turnos->contains(function (Turno $t) use ($desde, $hasta) {
                         $inicio = $t->hora_inicio instanceof CarbonInterface
                             ? $t->hora_inicio->format('H:i:s')
@@ -142,12 +134,11 @@ class SlotService
                         continue;
                     }
 
-                    // Hold activo
                     if ($usaHolds) {
-                        $holdActivo = DB::table('slot_holds')
+                        $holdActivo = SlotHold::query()
                             ->where('profesor_id', $profesor->id)
                             ->whereDate('fecha', $fecha->toDateString())
-                            ->where('estado', 'activo')
+                            ->where('estado', SlotHold::ESTADO_ACTIVO)
                             ->where(function ($q) {
                                 $q->whereNull('expires_at')
                                     ->orWhere('expires_at', '>', now());
@@ -165,27 +156,27 @@ class SlotService
                     }
 
                     $precioPorHora = $preciosPorProfesor[$profesor->id] ?? null;
-                    $precioTotal   = null;
+                    $precioTotal = null;
 
                     if ($precioPorHora !== null) {
-                        $horas       = $duracion / 60;
+                        $horas = $duracion / 60;
                         $precioTotal = $precioPorHora * $horas;
                     }
 
                     $slots->push([
-                        'profesor_id'      => $profesor->id,
-                        'profesor_nombre'  => $nombreCompleto ?: ($profesor->name ?? 'Profesor'),
-                        'fecha'            => $fecha->toDateString(),
-                        'hora_inicio'      => $desde,
-                        'hora_fin'         => $hasta,
-                        'desde'            => substr($desde, 0, 5),
-                        'hasta'            => substr($hasta, 0, 5),
-                        'materia_id'       => $materiaId,
-                        'tema_id'          => $temaId,
-                        'rating_avg'       => $ratingAvg,
-                        'rating_count'     => $ratingCnt,
-                        'precio_por_hora'  => $precioPorHora,
-                        'precio_total'     => $precioTotal,
+                        'profesor_id' => $profesor->id,
+                        'profesor_nombre' => $nombreCompleto ?: ($profesor->name ?? 'Profesor'),
+                        'fecha' => $fecha->toDateString(),
+                        'hora_inicio' => $desde,
+                        'hora_fin' => $hasta,
+                        'desde' => substr($desde, 0, 5),
+                        'hasta' => substr($hasta, 0, 5),
+                        'materia_id' => $materiaId,
+                        'tema_id' => $temaId,
+                        'rating_avg' => $ratingAvg,
+                        'rating_count' => $ratingCnt,
+                        'precio_por_hora' => $precioPorHora,
+                        'precio_total' => $precioTotal,
                     ]);
 
                     $cursor->addMinutes($duracion);
@@ -201,16 +192,42 @@ class SlotService
             ->sort(function ($a, $b) {
                 $aAvg = (float) ($a['rating_avg'] ?? 0);
                 $bAvg = (float) ($b['rating_avg'] ?? 0);
-                if ($aAvg !== $bAvg) return $bAvg <=> $aAvg;
+                if ($aAvg !== $bAvg) {
+                    return $bAvg <=> $aAvg;
+                }
 
                 $aCnt = (int) ($a['rating_count'] ?? 0);
                 $bCnt = (int) ($b['rating_count'] ?? 0);
-                if ($aCnt !== $bCnt) return $bCnt <=> $aCnt;
+                if ($aCnt !== $bCnt) {
+                    return $bCnt <=> $aCnt;
+                }
 
                 $aPrice = (float) ($a['precio_por_hora'] ?? 999999);
                 $bPrice = (float) ($b['precio_por_hora'] ?? 999999);
                 return $aPrice <=> $bPrice;
             })
             ->values();
+    }
+
+    public function crearHoldDesdeTurnoCanceladoParaReemplazo(Turno $turno, array $meta = []): int
+    {
+        $ttlMin = (int) config('matching.replacement_invite_ttl_minutes', 30);
+
+        $hold = SlotHold::create([
+            'profesor_id' => (int) $turno->profesor_id,
+            'fecha' => $turno->fecha->toDateString(),
+            'hora_inicio' => (string) $turno->hora_inicio,
+            'hora_fin' => (string) $turno->hora_fin,
+            'motivo' => 'reemplazo',
+            'estado' => SlotHold::ESTADO_ACTIVO,
+            'expires_at' => now()->addMinutes($ttlMin),
+            'meta' => [
+                'turno_cancelado_id' => (int) $turno->id,
+                'motivo_sistema' => 'buscar_reemplazo',
+                ...$meta,
+            ],
+        ]);
+
+        return (int) $hold->id;
     }
 }

@@ -36,7 +36,6 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
             return;
         }
 
-        // Solo si sigue cancelado y sin reemplazo
         if ((string) $turno->estado !== Turno::ESTADO_CANCELADO) {
             return;
         }
@@ -49,7 +48,6 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
         $horaInicio = $matcher->normalizarHora((string) $turno->hora_inicio);
         $horaFin    = $matcher->normalizarHora((string) $turno->hora_fin);
 
-        // Buscar solicitudes activas (misma fecha + misma materia + solape)
         $solicitudes = SolicitudDisponibilidad::query()
             ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
             ->whereDate('fecha', $fecha)
@@ -73,7 +71,6 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
                 break;
             }
 
-            // Intersección slot cancelado vs solicitud
             $slotInicio = max(
                 $matcher->normalizarHora((string) $s->hora_inicio),
                 $horaInicio
@@ -88,7 +85,6 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
                 continue;
             }
 
-            // Crear/actualizar invitación para ese alumno
             $inv = TurnoReemplazo::updateOrCreate(
                 [
                     'turno_cancelado_id' => $turno->id,
@@ -106,10 +102,8 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
                 ]
             );
 
-            // ✅ Notificar por mail al alumno solo una vez
             $inv->refresh();
 
-            // Requiere columna notificado_at (recomendado)
             if (isset($inv->notificado_at) && $inv->notificado_at !== null) {
                 $creadas++;
                 continue;
@@ -132,7 +126,6 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
                     new AlumnoInvitacionReemplazo($inv, $urlAceptar, $urlRechazar)
                 );
 
-                // si existe notificado_at, marcarlo
                 if (array_key_exists('notificado_at', $inv->getAttributes())) {
                     $inv->update(['notificado_at' => now()]);
                 }
@@ -141,7 +134,6 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
             $creadas++;
         }
 
-        // Programar notificación si no se consigue reemplazo (tu lógica actual)
         dispatch(new NotificarReemplazoNoConseguidoJob($turno->id))
             ->delay(now()->addMinutes($ttlMin + 2));
     }

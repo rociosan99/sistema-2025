@@ -2,6 +2,7 @@
 
 namespace App\Filament\Alumno\Pages;
 
+use App\Jobs\ProcesarReemplazoTurnoCanceladoJob;
 use App\Mail\ProfesorTurnoReprogramado;
 use App\Models\Turno;
 use App\Models\User;
@@ -139,14 +140,22 @@ class ReprogramarTurno extends Page
 
         $turnoOriginalId = (int) $this->turnoOriginal->id;
         $nuevoTurnoId = null;
+        $slotHoldOriginalId = null;
 
         $estadoOriginalAntes = (string) $this->turnoOriginal->estado;
         $profesorOriginalId = (int) $this->turnoOriginal->profesor_id;
         $fechaOriginal = $this->turnoOriginal->fecha ? $this->turnoOriginal->fecha->toDateString() : null;
         $horaInicioOriginal = (string) $this->turnoOriginal->hora_inicio;
         $horaFinOriginal = (string) $this->turnoOriginal->hora_fin;
+        $alumnoExcluidoId = (int) $this->turnoOriginal->alumno_id;
 
-        DB::transaction(function () use ($slot, &$nuevoTurnoId) {
+        DB::transaction(function () use (
+            $slot,
+            &$nuevoTurnoId,
+            &$slotHoldOriginalId,
+            $turnoOriginalId,
+            $alumnoExcluidoId
+        ) {
             $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
             $horasHastaInicio = now()->diffInHours($this->turnoOriginal->inicioDateTime(), false);
 
@@ -169,7 +178,8 @@ class ReprogramarTurno extends Page
                 ]);
             }
 
-            $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
+            $hayChoque = Turno::query()
+                ->where('profesor_id', $slot['profesor_id'])
                 ->whereDate('fecha', $slot['fecha'])
                 ->where(function ($q) use ($slot) {
                     $q->where('hora_inicio', '<', $slot['hora_fin'])
@@ -218,14 +228,31 @@ class ReprogramarTurno extends Page
                 'reprogramado_por_turno_id' => $nuevo->id,
                 'reprogramado_at' => now(),
             ]);
+
+            $turnoOriginalCancelado = $this->turnoOriginal->fresh();
+
+            $slotHoldOriginalId = $this->slotService->crearHoldDesdeTurnoCanceladoParaReemplazo(
+                $turnoOriginalCancelado,
+                [
+                    'origen' => 'reprogramacion_sin_cargo',
+                    'turno_nuevo_id' => $nuevo->id,
+                    'excluded_alumno_id' => $alumnoExcluidoId,
+                    'turno_original_id' => $turnoOriginalId,
+                ]
+            );
+
+            DB::afterCommit(function () use ($turnoOriginalId, $alumnoExcluidoId) {
+                ProcesarReemplazoTurnoCanceladoJob::dispatch(
+                    $turnoOriginalId,
+                    $alumnoExcluidoId
+                );
+            });
         });
 
-        /** @var \App\Models\Turno|null $turnoOriginal */
         $turnoOriginal = Turno::with(['profesor', 'alumno', 'materia', 'tema'])
             ->whereKey($turnoOriginalId)
             ->first();
 
-        /** @var \App\Models\Turno|null $turnoNuevo */
         $turnoNuevo = $nuevoTurnoId
             ? Turno::with(['profesor', 'alumno', 'materia', 'tema'])
                 ->whereKey($nuevoTurnoId)
@@ -251,6 +278,10 @@ class ReprogramarTurno extends Page
                 'hora_inicio_nueva' => (string) $turnoNuevo->hora_inicio,
                 'hora_fin_nueva' => (string) $turnoNuevo->hora_fin,
                 'cancelacion_tipo' => 'sin_cargo',
+                'slot_hold_original_id' => $slotHoldOriginalId,
+                'reemplazo_busqueda_disparada' => true,
+                'alumno_excluido_reemplazo_id' => $alumnoExcluidoId,
+                'motivo_recuperacion_hueco' => 'reprogramacion_sin_cargo',
             ]);
         }
 
@@ -261,7 +292,7 @@ class ReprogramarTurno extends Page
 
         Notification::make()
             ->title('Turno reprogramado')
-            ->body('Se creó un nuevo turno con el nuevo horario.')
+            ->body('Se creó el nuevo turno y se puso en búsqueda el horario original liberado.')
             ->success()
             ->send();
 
