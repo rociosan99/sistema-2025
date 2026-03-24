@@ -4,6 +4,7 @@ namespace App\Filament\Alumno\Pages;
 
 use App\Mail\ProfesorTurnoReprogramado;
 use App\Models\Turno;
+use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\SlotService;
 use BackedEnum;
@@ -106,13 +107,15 @@ class ReprogramarTurno extends Page
             ]);
         }
 
-        $this->slots = $this->slotService
+        $slots = $this->slotService
             ->obtenerSlotsPorMateria(
                 (int) $this->turnoOriginal->materia_id,
                 $fecha,
                 $this->turnoOriginal->tema_id ? (int) $this->turnoOriginal->tema_id : null
             )
             ->toArray();
+
+        $this->slots = $this->filtrarSlotsProfesoresActivos($slots);
     }
 
     public function reprogramar(int $index): void
@@ -153,6 +156,19 @@ class ReprogramarTurno extends Page
                 ]);
             }
 
+            $profesorActivo = User::query()
+                ->whereKey($slot['profesor_id'])
+                ->where('role', 'profesor')
+                ->where('activo', true)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $profesorActivo) {
+                throw ValidationException::withMessages([
+                    'slot' => 'El profesor de ese horario ya no está disponible.',
+                ]);
+            }
+
             $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
                 ->whereDate('fecha', $slot['fecha'])
                 ->where(function ($q) use ($slot) {
@@ -180,7 +196,7 @@ class ReprogramarTurno extends Page
 
             $nuevo = Turno::create([
                 'alumno_id' => $this->turnoOriginal->alumno_id,
-                'profesor_id' => $slot['profesor_id'],
+                'profesor_id' => $profesorActivo->id,
                 'materia_id' => $this->turnoOriginal->materia_id,
                 'tema_id' => $this->turnoOriginal->tema_id,
                 'fecha' => $slot['fecha'],
@@ -252,5 +268,31 @@ class ReprogramarTurno extends Page
         if ($this->fecha) {
             $this->consultar();
         }
+    }
+
+    private function filtrarSlotsProfesoresActivos(array $slots): array
+    {
+        $profesoresIds = collect($slots)
+            ->pluck('profesor_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($profesoresIds)) {
+            return [];
+        }
+
+        $activos = User::query()
+            ->whereIn('id', $profesoresIds)
+            ->where('role', 'profesor')
+            ->where('activo', true)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return array_values(array_filter($slots, function (array $slot) use ($activos) {
+            return in_array((int) ($slot['profesor_id'] ?? 0), $activos, true);
+        }));
     }
 }

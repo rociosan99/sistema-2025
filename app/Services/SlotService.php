@@ -19,29 +19,40 @@ class SlotService
         $diaSemana = $fecha->dayOfWeekIso; // 1=lunes ... 7=domingo
         $duracion  = (int) (config('turnos.duracion_slot', 60) ?: 60);
 
-        // ✅ si la fecha es hoy, no mostrar horarios pasados
         $ahora = now();
         $esHoy = $fecha->isSameDay($ahora);
 
-        // ✅ HOLD: si no existe tabla, ignorar sin romper
         $usaHolds = Schema::hasTable('slot_holds');
 
-        // 1) IDs de profes que dictan esa materia
-        $profesoresIds = DB::table('profesor_materia')
-            ->where('materia_id', $materiaId)
-            ->pluck('profesor_id')
+        // 1) IDs de profes activos que dictan esa materia
+        $profesoresQuery = DB::table('profesor_materia as pm')
+            ->join('users as u', 'u.id', '=', 'pm.profesor_id')
+            ->where('pm.materia_id', $materiaId)
+            ->where('u.role', 'profesor')
+            ->where('u.activo', true);
+
+        // Si viene tema, también filtrar por profesores que tengan ese tema
+        if ($temaId) {
+            $profesoresQuery->join('profesor_tema as pt', 'pt.profesor_id', '=', 'pm.profesor_id')
+                ->where('pt.tema_id', $temaId);
+        }
+
+        $profesoresIds = $profesoresQuery
+            ->pluck('pm.profesor_id')
             ->unique()
-            ->toArray();
+            ->values()
+            ->all();
 
         if (empty($profesoresIds)) {
             return collect();
         }
 
-        // 2) Profesores
+        // 2) Profesores activos
         $profesores = User::query()
             ->whereIn('id', $profesoresIds)
             ->where('role', 'profesor')
-            ->get(['id', 'name', 'apellido']);
+            ->where('activo', true)
+            ->get(['id', 'name', 'apellido', 'activo']);
 
         if ($profesores->isEmpty()) {
             return collect();
@@ -54,7 +65,7 @@ class SlotService
             ->pluck('precio_por_hora', 'profesor_id')
             ->toArray();
 
-        // 4) Ratings por profe (avg + count)
+        // 4) Ratings por profe
         $ratings = CalificacionProfesor::query()
             ->selectRaw('profesor_id, AVG(estrellas) as avg_estrellas, COUNT(*) as cant')
             ->whereIn('profesor_id', $profesores->pluck('id')->all())
@@ -65,7 +76,6 @@ class SlotService
         $slots = collect();
 
         foreach ($profesores as $profesor) {
-
             $ratingRow = $ratings->get($profesor->id);
             $ratingAvg = $ratingRow?->avg_estrellas !== null ? round((float) $ratingRow->avg_estrellas, 1) : 0.0;
             $ratingCnt = $ratingRow?->cant !== null ? (int) $ratingRow->cant : 0;
@@ -95,27 +105,26 @@ class SlotService
                 ->get(['hora_inicio', 'hora_fin']);
 
             foreach ($bloques as $bloque) {
-
                 $horaInicioBloque = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_inicio);
                 $horaFinBloque    = $fecha->copy()->setTimeFromTimeString((string) $bloque->hora_fin);
 
                 $cursor = $horaInicioBloque->copy();
 
                 while ($cursor->copy()->addMinutes($duracion)->lte($horaFinBloque)) {
-
                     $desde = $cursor->format('H:i:s');
                     $hasta = $cursor->copy()->addMinutes($duracion)->format('H:i:s');
 
-                    // ✅ HOY: no mostrar slots pasados
+                    // Si la fecha es hoy, no mostrar horarios pasados
                     if ($esHoy) {
                         $inicioSlot = Carbon::parse($fecha->toDateString() . ' ' . $desde);
+
                         if ($inicioSlot->lte($ahora)) {
                             $cursor->addMinutes($duracion);
                             continue;
                         }
                     }
 
-                    // 1) choque con turnos ya reservados
+                    // Choque con turnos reservados
                     $hayChoque = $turnos->contains(function (Turno $t) use ($desde, $hasta) {
                         $inicio = $t->hora_inicio instanceof CarbonInterface
                             ? $t->hora_inicio->format('H:i:s')
@@ -133,18 +142,19 @@ class SlotService
                         continue;
                     }
 
-                    // ✅ 2) HOLD activo: si existe, NO mostrar en slots generales
+                    // Hold activo
                     if ($usaHolds) {
                         $holdActivo = DB::table('slot_holds')
                             ->where('profesor_id', $profesor->id)
                             ->whereDate('fecha', $fecha->toDateString())
                             ->where('estado', 'activo')
                             ->where(function ($q) {
-                                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                                $q->whereNull('expires_at')
+                                    ->orWhere('expires_at', '>', now());
                             })
                             ->where(function ($q) use ($desde, $hasta) {
                                 $q->where('hora_inicio', '<', $hasta)
-                                  ->where('hora_fin', '>', $desde);
+                                    ->where('hora_fin', '>', $desde);
                             })
                             ->exists();
 
@@ -154,7 +164,6 @@ class SlotService
                         }
                     }
 
-                    // ✅ OK: slot publicable
                     $precioPorHora = $preciosPorProfesor[$profesor->id] ?? null;
                     $precioTotal   = null;
 
@@ -173,10 +182,8 @@ class SlotService
                         'hasta'            => substr($hasta, 0, 5),
                         'materia_id'       => $materiaId,
                         'tema_id'          => $temaId,
-
                         'rating_avg'       => $ratingAvg,
                         'rating_count'     => $ratingCnt,
-
                         'precio_por_hora'  => $precioPorHora,
                         'precio_total'     => $precioTotal,
                     ]);
@@ -190,7 +197,6 @@ class SlotService
             return $slots;
         }
 
-        // ✅ Orden tipo Uber
         return $slots
             ->sort(function ($a, $b) {
                 $aAvg = (float) ($a['rating_avg'] ?? 0);

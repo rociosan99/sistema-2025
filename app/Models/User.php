@@ -8,17 +8,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-/**
- * @property int $id
- * @property string $name
- * @property string $apellido
- * @property string $email
- * @property string $role
- * @property int|null $carrera_activa_id
- * @property string|null $profile_photo_path
- * @property string|null $google_id
- * @property string|null $google_avatar_url
- */
 class User extends Authenticatable implements FilamentUser
 {
     use HasFactory, Notifiable;
@@ -29,10 +18,9 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'role',
+        'activo',
         'carrera_activa_id',
         'profile_photo_path',
-
-        // ✅ Google OAuth
         'google_id',
         'google_avatar_url',
     ];
@@ -47,6 +35,7 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'activo' => 'boolean',
         ];
     }
 
@@ -67,6 +56,10 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
+        if (! $this->activo) {
+            return false;
+        }
+
         return match ($panel->getId()) {
             'admin'    => $this->isAdmin(),
             'profesor' => $this->isProfesor(),
@@ -74,10 +67,6 @@ class User extends Authenticatable implements FilamentUser
             default    => false,
         };
     }
-
-    /* ==========================
-       RELACIONES PROFESOR
-       ========================== */
 
     public function materias()
     {
@@ -133,10 +122,6 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(CalificacionProfesor::class, 'profesor_id', 'id');
     }
-
-    /* ==========================
-       PERFIL ACADÉMICO ALUMNO
-       ========================== */
 
     public function carrerasComoAlumno()
     {

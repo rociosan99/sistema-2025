@@ -25,9 +25,9 @@ class TurnoResource extends Resource
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendar;
 
     protected static ?string $navigationLabel = 'Turnos';
-    protected static ?string $pluralLabel      = 'Turnos';
-    protected static ?string $modelLabel       = 'Turno';
-    protected static ?string $slug             = 'turnos';
+    protected static ?string $pluralLabel = 'Turnos';
+    protected static ?string $modelLabel = 'Turno';
+    protected static ?string $slug = 'turnos';
 
     protected static ?string $recordTitleAttribute = 'fecha';
 
@@ -83,8 +83,23 @@ class TurnoResource extends Resource
                 TextColumn::make('profesor.name')
                     ->label('Profesor')
                     ->formatStateUsing(function ($state, Turno $record) {
-                        $nombre = trim(($record->profesor?->name ?? '') . ' ' . ($record->profesor?->apellido ?? ''));
-                        return $nombre !== '' ? $nombre : ($record->profesor?->name ?? '-');
+                        $profesor = $record->profesor;
+
+                        if (! $profesor) {
+                            return '-';
+                        }
+
+                        $nombre = trim(($profesor->name ?? '') . ' ' . ($profesor->apellido ?? ''));
+
+                        if ($nombre === '') {
+                            $nombre = $profesor->name ?? '-';
+                        }
+
+                        if (isset($profesor->activo) && ! $profesor->activo) {
+                            $nombre .= ' (dado de baja)';
+                        }
+
+                        return $nombre;
                     })
                     ->placeholder('-'),
 
@@ -92,16 +107,9 @@ class TurnoResource extends Resource
                     ->label('Acciones')
                     ->view('filament.alumno.turnos.acciones'),
             ])
-
-            // ✅ filtros visibles arriba
             ->filtersLayout(FiltersLayout::AboveContent)
-
-            // ✅ 3 columnas para que quede: Estado | Materia | Profesor
-            // y luego: Desde | Hasta (baja solo)
             ->filtersFormColumns(3)
-
             ->filters([
-                // ✅ Estado
                 Tables\Filters\SelectFilter::make('estado')
                     ->label('Estado')
                     ->options([
@@ -115,7 +123,6 @@ class TurnoResource extends Resource
                     ])
                     ->native(false),
 
-                // ✅ Materia
                 Tables\Filters\SelectFilter::make('materia_id')
                     ->label('Materia')
                     ->relationship('materia', 'materia_nombre')
@@ -123,17 +130,22 @@ class TurnoResource extends Resource
                     ->preload()
                     ->native(false),
 
-                // ✅ Profesor (nombre + apellido)
                 Tables\Filters\SelectFilter::make('profesor_id')
                     ->label('Profesor')
                     ->options(function () {
                         return User::query()
                             ->where('role', 'profesor')
                             ->orderBy('name')
-                            ->get(['id', 'name', 'apellido'])
+                            ->get(['id', 'name', 'apellido', 'activo'])
                             ->mapWithKeys(function ($u) {
                                 $nombre = trim(($u->name ?? '') . ' ' . ($u->apellido ?? ''));
-                                return [$u->id => ($nombre !== '' ? $nombre : ($u->name ?? 'Profesor'))];
+                                $nombre = $nombre !== '' ? $nombre : ($u->name ?? 'Profesor');
+
+                                if (isset($u->activo) && ! $u->activo) {
+                                    $nombre .= ' (dado de baja)';
+                                }
+
+                                return [$u->id => $nombre];
                             })
                             ->toArray();
                     })
@@ -141,7 +153,6 @@ class TurnoResource extends Resource
                     ->preload()
                     ->native(false),
 
-                // ✅ Rango de fechas (desde / hasta)
                 Tables\Filters\Filter::make('rango_fechas')
                     ->label('Fecha')
                     ->form([
@@ -154,7 +165,6 @@ class TurnoResource extends Resource
                             ->when($data['hasta'] ?? null, fn (Builder $q, $hasta) => $q->whereDate('fecha', '<=', $hasta));
                     }),
             ])
-
             ->defaultSort('fecha', 'asc')
             ->emptyStateHeading('No tenés turnos aún')
             ->emptyStateDescription('Solicitá un turno desde el botón "Solicitar turno".');

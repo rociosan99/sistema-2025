@@ -1,6 +1,7 @@
 @php
     /** @var \App\Models\Turno $record */
 
+    use App\Models\Turno;
     use Carbon\Carbon;
     use Carbon\CarbonInterface;
 
@@ -15,49 +16,82 @@
         $horaInicioStr = (string) ($record->hora_inicio ?? '');
         $horaFinStr    = (string) ($record->hora_fin ?? '');
 
-        if (preg_match('/^\d{2}:\d{2}$/', $horaInicioStr)) $horaInicioStr .= ':00';
-        if (preg_match('/^\d{2}:\d{2}$/', $horaFinStr)) $horaFinStr .= ':00';
+        if (preg_match('/^\d{2}:\d{2}$/', $horaInicioStr)) {
+            $horaInicioStr .= ':00';
+        }
 
-        if ($horaInicioStr !== '') $inicioTurno = $fecha->copy()->setTimeFromTimeString($horaInicioStr);
-        if ($horaFinStr !== '') $finTurno = $fecha->copy()->setTimeFromTimeString($horaFinStr);
+        if (preg_match('/^\d{2}:\d{2}$/', $horaFinStr)) {
+            $horaFinStr .= ':00';
+        }
+
+        if ($horaInicioStr !== '') {
+            $inicioTurno = $fecha->copy()->setTimeFromTimeString($horaInicioStr);
+        }
+
+        if ($horaFinStr !== '') {
+            $finTurno = $fecha->copy()->setTimeFromTimeString($horaFinStr);
+        }
     } catch (\Throwable $e) {
         $inicioTurno = null;
         $finTurno = null;
     }
 
-    $yaEmpezo   = $inicioTurno ? $inicioTurno->isPast() : false;
-    $yaFinalizo = $finTurno ? $finTurno->isPast() : false;
+    $ahora = now();
 
-    $puedePagar = ($record->estado === \App\Models\Turno::ESTADO_PENDIENTE_PAGO) && ! $yaEmpezo;
+    $yaEmpezo = $inicioTurno ? $ahora->gte($inicioTurno) : false;
+    $yaFinalizo = $finTurno ? $ahora->gte($finTurno) : false;
 
-    $puedeCancelar = in_array($record->estado, [
-        \App\Models\Turno::ESTADO_PENDIENTE,
-        \App\Models\Turno::ESTADO_ACEPTADO,
-        \App\Models\Turno::ESTADO_PENDIENTE_PAGO,
-        \App\Models\Turno::ESTADO_CONFIRMADO,
-    ], true) && ! $yaEmpezo;
+    $estado = (string) $record->estado;
 
-    // ✅ Reprogramar solo si >= 24h
+    $estaCancelado = $estado === Turno::ESTADO_CANCELADO;
+    $estaRechazado = $estado === Turno::ESTADO_RECHAZADO;
+    $estaConfirmado = $estado === Turno::ESTADO_CONFIRMADO;
+    $estaVencidoEstado = $estado === Turno::ESTADO_VENCIDO;
+
+    // Si nunca se confirmó y ya llegó/pasó la hora de inicio, se considera vencido
+    $vencidoPorHora = in_array($estado, [
+        Turno::ESTADO_PENDIENTE,
+        Turno::ESTADO_ACEPTADO,
+        Turno::ESTADO_PENDIENTE_PAGO,
+    ], true) && $yaEmpezo;
+
+    $estaVencido = $estaVencidoEstado || $vencidoPorHora;
+
+    $puedePagar = ($estado === Turno::ESTADO_PENDIENTE_PAGO) && ! $yaEmpezo && ! $estaVencido;
+
+    $puedeCancelar = in_array($estado, [
+        Turno::ESTADO_PENDIENTE,
+        Turno::ESTADO_ACEPTADO,
+        Turno::ESTADO_PENDIENTE_PAGO,
+        Turno::ESTADO_CONFIRMADO,
+    ], true) && ! $yaEmpezo && ! $estaVencido;
+
     $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
-    $horasHastaInicio = $inicioTurno ? now()->diffInHours($inicioTurno, false) : -999;
+    $horasHastaInicio = $inicioTurno ? $ahora->diffInHours($inicioTurno, false) : -999;
 
-    $puedeReprogramar = in_array($record->estado, [
-        \App\Models\Turno::ESTADO_PENDIENTE,
-        \App\Models\Turno::ESTADO_PENDIENTE_PAGO,
-        \App\Models\Turno::ESTADO_CONFIRMADO,
-    ], true) && ! $yaEmpezo && ($horasHastaInicio >= $horasRegla);
-
-    $estaCancelado = ($record->estado === \App\Models\Turno::ESTADO_CANCELADO);
+    $puedeReprogramar = in_array($estado, [
+        Turno::ESTADO_PENDIENTE,
+        Turno::ESTADO_PENDIENTE_PAGO,
+        Turno::ESTADO_CONFIRMADO,
+    ], true) && ! $yaEmpezo && ! $estaVencido && ($horasHastaInicio >= $horasRegla);
 @endphp
 
 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
 
     @if($estaCancelado)
         <span style="font-size:12px; font-weight:800; color:#991b1b;">❌ Cancelaste esta clase</span>
-    @elseif($yaFinalizo)
-        <span style="font-size:12px; font-weight:700; color:#6b7280;">✅ Clase finalizada</span>
-    @elseif($yaEmpezo)
+
+    @elseif($estaRechazado)
+        <span style="font-size:12px; font-weight:800; color:#991b1b;">❌ Solicitud rechazada</span>
+
+    @elseif($estaVencido)
+        <span style="font-size:12px; font-weight:700; color:#6b7280;">⏰ Turno vencido</span>
+
+    @elseif($estaConfirmado && $yaEmpezo && ! $yaFinalizo)
         <span style="font-size:12px; font-weight:700; color:#6b7280;">⏳ Clase en curso</span>
+
+    @elseif($estaConfirmado && $yaFinalizo)
+        <span style="font-size:12px; font-weight:700; color:#166534;">✅ Clase finalizada</span>
     @endif
 
     @if($puedePagar)

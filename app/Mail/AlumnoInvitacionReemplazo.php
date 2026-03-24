@@ -19,7 +19,7 @@ class AlumnoInvitacionReemplazo extends Mailable
 
     public function build()
     {
-        return $this->subject('Nueva clase disponible para tu solicitud')
-            ->view('mails.alumno-invitacion-reemplazo');
+    return $this->subject('Invitación de reemplazo')
+        ->view('emails.alumno-invitacion-reemplazo');
     }
 }

@@ -59,9 +59,9 @@ class TurnosTable
                         'danger'  => Turno::ESTADO_RECHAZADO,
                         'gray'    => Turno::ESTADO_VENCIDO,
                     ])
-                    ->formatStateUsing(function ($state, $record) {
+                    ->formatStateUsing(function ($state, Turno $record) {
                         if (
-                            in_array($state, [Turno::ESTADO_PENDIENTE, Turno::ESTADO_PENDIENTE_PAGO], true)
+                            in_array((string) $state, [Turno::ESTADO_PENDIENTE, Turno::ESTADO_PENDIENTE_PAGO], true)
                             && self::estaVencido($record)
                         ) {
                             return 'Vencido';
@@ -143,12 +143,12 @@ class TurnosTable
                     ->label('Aceptar')
                     ->color('primary')
                     ->requiresConfirmation()
-                    ->visible(fn ($record) =>
+                    ->visible(fn (Turno $record) =>
                         $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
                     ->action(function (Turno $record) {
-                        if (self::estaVencido($record)) {
+                        if (self::marcarComoVencidoSiCorresponde($record)) {
                             return;
                         }
 
@@ -184,12 +184,12 @@ class TurnosTable
                     ->label('Rechazar')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn ($record) =>
+                    ->visible(fn (Turno $record) =>
                         $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
                     ->action(function (Turno $record) {
-                        if (self::estaVencido($record)) {
+                        if (self::marcarComoVencidoSiCorresponde($record)) {
                             return;
                         }
 
@@ -224,7 +224,7 @@ class TurnosTable
             ->paginated();
     }
 
-    protected static function estaVencido($turno): bool
+    protected static function estaVencido(Turno $turno): bool
     {
         if (in_array((string) $turno->estado, [
             Turno::ESTADO_CONFIRMADO,
@@ -239,18 +239,49 @@ class TurnosTable
             ? $turno->fecha->copy()
             : Carbon::parse($turno->fecha);
 
-        $horaFinStr = (string) $turno->hora_fin;
+        $horaInicioStr = (string) $turno->hora_inicio;
 
-        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaFinStr)) {
-            $horaFinStr = Carbon::parse($horaFinStr)->format('H:i:s');
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaInicioStr)) {
+            $horaInicioStr = Carbon::parse($horaInicioStr)->format('H:i:s');
         }
 
-        if (preg_match('/^\d{2}:\d{2}$/', $horaFinStr)) {
-            $horaFinStr .= ':00';
+        if (preg_match('/^\d{2}:\d{2}$/', $horaInicioStr)) {
+            $horaInicioStr .= ':00';
         }
 
-        $finTurno = $fecha->copy()->setTimeFromTimeString($horaFinStr);
+        $inicioTurno = $fecha->copy()->setTimeFromTimeString($horaInicioStr);
 
-        return $finTurno->isPast();
+        return now()->gte($inicioTurno);
+    }
+
+    protected static function marcarComoVencidoSiCorresponde(Turno $turno): bool
+    {
+        if (
+            $turno->estado === Turno::ESTADO_PENDIENTE &&
+            self::estaVencido($turno)
+        ) {
+            /** @var AuditLogger $audit */
+            $audit = app(AuditLogger::class);
+
+            $estadoAntes = (string) $turno->estado;
+
+            $turno->update([
+                'estado' => Turno::ESTADO_VENCIDO,
+            ]);
+
+            $audit->log('turno.vencido', $turno, [
+                'turno_id' => $turno->id,
+                'motivo' => 'respuesta_profesor_fuera_de_hora',
+                'estado_anterior' => $estadoAntes,
+                'estado_nuevo' => Turno::ESTADO_VENCIDO,
+                'fecha' => (string) $turno->fecha,
+                'hora_inicio' => (string) $turno->hora_inicio,
+                'hora_fin' => (string) $turno->hora_fin,
+            ]);
+
+            return true;
+        }
+
+        return false;
     }
 }

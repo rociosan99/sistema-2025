@@ -1,14 +1,13 @@
 <x-filament-panels::page>
-
     <div style="display:flex; flex-direction:column; gap:18px;">
 
         {{-- Header --}}
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
+        <div style="border:1px solid #e5e7eb; border-radius:16px; padding:18px; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                 <div>
-                    <div style="font-size:18px; font-weight:900;">Estadísticas</div>
+                    <div style="font-size:22px; font-weight:900;">Módulo Estadístico</div>
                     <div style="font-size:13px; color:#6b7280; margin-top:4px;">
-                        Turnos por Materia / Tema / Estado / Profesores en el rango seleccionado.
+                        Analizá turnos por materia, tema, estado o profesor según el rango seleccionado.
                     </div>
                 </div>
 
@@ -31,250 +30,189 @@
                         Ver optimización de precios
                     </x-filament::button>
 
-                    <div style="font-size:12px; color:#374151; background:#f9fafb; border:1px solid #e5e7eb; padding:8px 10px; border-radius:12px;">
+                    <div style="font-size:12px; color:#374151; background:#f9fafb; border:1px solid #e5e7eb; padding:8px 12px; border-radius:12px;">
                         {{ $this->fechaInicio }} → {{ $this->fechaFin }}
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- Debug (oculto) --}}
-        <div style="display:none;">
-            <div>
-                <strong>Debug:</strong>
-                Turnos en rango = {{ $this->debugTotalTurnosEnRango }},
-                Materias distintas = {{ $this->debugMateriasDistintas }},
-                Temas distintas = {{ $this->debugTemasDistintos }}
-            </div>
-
-            <div style="margin-top:8px;">
-                <strong>Debug Temas:</strong>
-                Turnos con tema en rango = {{ $this->debugTurnosConTemaEnRango }}
-
-                <div style="margin-top:6px;">
-                    Top 5 temas (tema / solicitados):
-                    <ul style="margin:6px 0 0 18px;">
-                        @foreach($this->debugTopTemas as $x)
-                            <li>{{ $x['tema'] }} — {{ $x['solicitados'] }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-            </div>
-        </div>
-
         {{-- Filtros --}}
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
-            <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:end;">
+        <div style="border:1px solid #e5e7eb; border-radius:16px; padding:18px; background:#fff;">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px;">
 
                 <div style="display:flex; flex-direction:column; gap:6px;">
-                    <label style="font-size:12px; font-weight:900;">Desde</label>
+                    <label style="font-size:12px; font-weight:800;">Agrupar por</label>
+                    <select
+                        wire:model.live="dimension"
+                        style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px;"
+                    >
+                        <option value="materias">Materias</option>
+                        <option value="temas">Temas</option>
+                        <option value="estados">Estados</option>
+                        <option value="profesores">Profesores</option>
+                    </select>
+                </div>
+
+                @if($dimension !== 'estados')
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="font-size:12px; font-weight:800;">Mostrar</label>
+                        <select
+                            wire:model.live="metrica"
+                            style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px;"
+                        >
+                            <option value="solicitados">Solicitudes</option>
+                            <option value="confirmados">Confirmados</option>
+                            <option value="cancelados">Cancelados</option>
+                            <option value="vencidos">Vencidos</option>
+                        </select>
+                    </div>
+                @else
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <label style="font-size:12px; font-weight:800;">Mostrar</label>
+                        <div style="border:1px solid #e5e7eb; border-radius:12px; padding:10px 12px; background:#f9fafb; color:#6b7280;">
+                            Cantidad total por estado
+                        </div>
+                    </div>
+                @endif
+
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                    <label style="font-size:12px; font-weight:800;">Desde</label>
                     <input
                         type="date"
                         wire:model.live="fechaInicio"
-                        style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; width:220px;"
+                        style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px;"
                     >
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:6px;">
-                    <label style="font-size:12px; font-weight:900;">Hasta</label>
+                    <label style="font-size:12px; font-weight:800;">Hasta</label>
                     <input
                         type="date"
                         wire:model.live="fechaFin"
-                        style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; width:220px;"
+                        style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px;"
                     >
                 </div>
+            </div>
 
-                <div>
-                    <x-filament::button
-                        color="primary"
-                        wire:click="aplicarFiltros"
-                        wire:target="aplicarFiltros"
-                        wire:loading.attr="disabled"
-                        icon="heroicon-o-funnel"
-                    >
-                        <span wire:loading.remove wire:target="aplicarFiltros">Aplicar</span>
-                        <span wire:loading wire:target="aplicarFiltros">Cargando…</span>
-                    </x-filament::button>
-                </div>
-
+            <div style="margin-top:12px; font-size:12px; color:#6b7280;">
+                La vista se actualiza automáticamente al cambiar filtros.
             </div>
 
             @error('fechas')
-                <div style="margin-top:10px; color:#991b1b; font-weight:700;">{{ $message }}</div>
+                <div style="margin-top:10px; color:#991b1b; font-weight:700;">
+                    {{ $message }}
+                </div>
             @enderror
         </div>
 
-        {{-- Materias --}}
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
-            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">
-                Turnos por Materia (Top 10 por solicitudes)
+        {{-- Resumen --}}
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:14px;">
+            <div style="border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff;">
+                <div style="font-size:12px; color:#6b7280; font-weight:700;">Total de turnos</div>
+                <div style="font-size:28px; font-weight:900; margin-top:6px;">
+                    {{ $resumen['total'] ?? 0 }}
+                </div>
             </div>
 
-            <div
-                id="chartDataMaterias"
-                data-labels='@json($this->materiasChartLabels)'
-                data-values='@json($this->materiasChartSolicitados)'
-                style="display:none;"
-            ></div>
-
-            <div wire:ignore>
-                <canvas id="chartMaterias" style="max-width:100%; height:320px;"></canvas>
+            <div style="border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff;">
+                <div style="font-size:12px; color:#6b7280; font-weight:700;">Confirmados</div>
+                <div style="font-size:28px; font-weight:900; margin-top:6px;">
+                    {{ $resumen['confirmados'] ?? 0 }}
+                </div>
             </div>
 
-            <div style="margin-top:16px; overflow:auto;">
-                <table style="width:100%; border-collapse:collapse; min-width:760px;">
-                    <thead>
-                        <tr style="background:#111827; color:#fff;">
-                            <th style="text-align:left; padding:10px;">Materia</th>
-                            <th style="text-align:right; padding:10px;">Solicitudes</th>
-                            <th style="text-align:right; padding:10px;">Pagadas</th>
-                            <th style="text-align:right; padding:10px;">Canceladas</th>
-                            <th style="text-align:right; padding:10px;">Vencidas</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($this->materias as $row)
-                            <tr>
-                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['materia'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['solicitados'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['pagados'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['cancelados'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['vencidos'] }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" style="padding:10px; color:#6b7280;">Sin datos.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+            <div style="border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff;">
+                <div style="font-size:12px; color:#6b7280; font-weight:700;">Cancelados</div>
+                <div style="font-size:28px; font-weight:900; margin-top:6px;">
+                    {{ $resumen['cancelados'] ?? 0 }}
+                </div>
+            </div>
+
+            <div style="border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff;">
+                <div style="font-size:12px; color:#6b7280; font-weight:700;">Vencidos</div>
+                <div style="font-size:28px; font-weight:900; margin-top:6px;">
+                    {{ $resumen['vencidos'] ?? 0 }}
+                </div>
             </div>
         </div>
 
-        {{-- Temas --}}
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
-            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">
-                Turnos por Tema (Top 10 por solicitudes)
+        {{-- Gráfico --}}
+        <div style="border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+                <div style="font-size:16px; font-weight:900;">
+                    {{ $this->tituloGrafico }}
+                </div>
+
+                <div wire:loading.delay style="font-size:12px; color:#6b7280;">
+                    Actualizando...
+                </div>
             </div>
 
             <div
-                id="chartDataTemas"
-                data-labels='@json($this->temasChartLabels)'
-                data-values='@json($this->temasChartSolicitados)'
+                id="chartDataMain"
+                data-labels='@json($this->chartLabels)'
+                data-values='@json($this->chartValues)'
+                data-title='@json($this->tituloGrafico)'
                 style="display:none;"
             ></div>
 
             <div wire:ignore>
-                <canvas id="chartTemas" style="max-width:100%; height:320px;"></canvas>
-            </div>
-
-            <div style="margin-top:16px; overflow:auto;">
-                <table style="width:100%; border-collapse:collapse; min-width:760px;">
-                    <thead>
-                        <tr style="background:#111827; color:#fff;">
-                            <th style="text-align:left; padding:10px;">Tema</th>
-                            <th style="text-align:right; padding:10px;">Solicitudes</th>
-                            <th style="text-align:right; padding:10px;">Pagadas</th>
-                            <th style="text-align:right; padding:10px;">Canceladas</th>
-                            <th style="text-align:right; padding:10px;">Vencidas</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($this->temas as $row)
-                            <tr>
-                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['tema'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['solicitados'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['pagados'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['cancelados'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['vencidos'] }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" style="padding:10px; color:#6b7280;">Sin datos.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
+                <canvas id="chartMain" style="max-width:100%; height:340px;"></canvas>
             </div>
         </div>
 
-        {{-- Estados --}}
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
-            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">
-                Turnos por Estado
+        {{-- Tabla --}}
+        <div style="border:1px solid #e5e7eb; border-radius:16px; padding:16px; background:#fff;">
+            <div style="font-size:16px; font-weight:900; margin-bottom:12px;">
+                Detalle
             </div>
 
-            <div
-                id="chartDataEstados"
-                data-labels='@json($this->estadosChartLabels)'
-                data-values='@json($this->estadosChartTotales)'
-                style="display:none;"
-            ></div>
-
-            <div wire:ignore>
-                <canvas id="chartEstados" style="max-width:100%; height:320px;"></canvas>
-            </div>
-
-            <div style="margin-top:16px; overflow:auto;">
-                <table style="width:100%; border-collapse:collapse; min-width:760px;">
+            <div style="overflow:auto;">
+                <table style="width:100%; border-collapse:collapse; min-width:860px;">
                     <thead>
                         <tr style="background:#111827; color:#fff;">
-                            <th style="text-align:left; padding:10px;">Estado</th>
-                            <th style="text-align:right; padding:10px;">Cantidad</th>
+                            @foreach($columnas as $col)
+                                @php
+                                    $label = match($col) {
+                                        'nombre' => 'Nombre',
+                                        'email' => 'Email',
+                                        'solicitados' => 'Solicitudes',
+                                        'confirmados' => 'Confirmados',
+                                        'cancelados' => 'Cancelados',
+                                        'vencidos' => 'Vencidos',
+                                        'total' => 'Cantidad',
+                                        default => ucfirst(str_replace('_', ' ', $col)),
+                                    };
+
+                                    $alignRight = in_array($col, ['solicitados', 'confirmados', 'cancelados', 'vencidos', 'total']);
+                                @endphp
+
+                                <th style="padding:10px; text-align:{{ $alignRight ? 'right' : 'left' }};">
+                                    {{ $label }}
+                                </th>
+                            @endforeach
                         </tr>
                     </thead>
+
                     <tbody>
-                        @forelse($this->estados as $row)
+                        @forelse($tabla as $row)
                             <tr>
-                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['estado'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['total'] }}</td>
+                                @foreach($columnas as $col)
+                                    @php
+                                        $alignRight = in_array($col, ['solicitados', 'confirmados', 'cancelados', 'vencidos', 'total']);
+                                    @endphp
+
+                                    <td style="padding:10px; border-bottom:1px solid #e5e7eb; text-align:{{ $alignRight ? 'right' : 'left' }};">
+                                        {{ $row[$col] ?? '-' }}
+                                    </td>
+                                @endforeach
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="2" style="padding:10px; color:#6b7280;">Sin datos.</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        {{-- Profesores --}}
-        <div style="border:1px solid #e5e7eb; border-radius:14px; padding:16px; background:#fff;">
-            <div style="font-size:16px; font-weight:900; margin-bottom:10px;">
-                Profesores con más clases confirmadas
-            </div>
-
-            <div
-                id="chartDataProfesores"
-                data-labels='@json($this->profesoresChartLabels)'
-                data-values='@json($this->profesoresChartConfirmados)'
-                style="display:none;"
-            ></div>
-
-            <div wire:ignore>
-                <canvas id="chartProfesores" style="max-width:100%; height:320px;"></canvas>
-            </div>
-
-            <div style="margin-top:16px; overflow:auto;">
-                <table style="width:100%; border-collapse:collapse; min-width:760px;">
-                    <thead>
-                        <tr style="background:#111827; color:#fff;">
-                            <th style="text-align:left; padding:10px;">Profesor</th>
-                            <th style="text-align:left; padding:10px;">Email</th>
-                            <th style="text-align:right; padding:10px;">Clases confirmadas</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($this->profesores as $row)
-                            <tr>
-                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['profesor'] }}</td>
-                                <td style="padding:10px; border-bottom:1px solid #e5e7eb;">{{ $row['email'] }}</td>
-                                <td style="padding:10px; text-align:right; border-bottom:1px solid #e5e7eb;">{{ $row['confirmados'] }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="3" style="padding:10px; color:#6b7280;">Sin datos.</td>
+                                <td colspan="{{ count($columnas) }}" style="padding:12px; color:#6b7280;">
+                                    Sin datos en el rango seleccionado.
+                                </td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -287,132 +225,75 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        function readChartData(id) {
-            const el = document.getElementById(id);
-            if (!el) return { labels: [], values: [] };
+        function readChartDataMain() {
+            const el = document.getElementById('chartDataMain');
+
+            if (!el) {
+                return { labels: [], values: [], title: '' };
+            }
 
             let labels = [];
             let values = [];
+            let title = '';
 
             try { labels = JSON.parse(el.dataset.labels || '[]'); } catch (e) { labels = []; }
             try { values = JSON.parse(el.dataset.values || '[]'); } catch (e) { values = []; }
+            try { title = JSON.parse(el.dataset.title || '""'); } catch (e) { title = ''; }
 
-            return { labels, values };
+            return { labels, values, title };
         }
 
-        function renderCharts() {
-            const materias = readChartData('chartDataMaterias');
-            const temas = readChartData('chartDataTemas');
-            const estados = readChartData('chartDataEstados');
-            const profesores = readChartData('chartDataProfesores');
+        function renderMainChart() {
+            const data = readChartDataMain();
+            const canvas = document.getElementById('chartMain');
 
-            if (window._chartMaterias) window._chartMaterias.destroy();
-            if (window._chartTemas) window._chartTemas.destroy();
-            if (window._chartEstados) window._chartEstados.destroy();
-            if (window._chartProfesores) window._chartProfesores.destroy();
+            if (!canvas) return;
 
-            const cM = document.getElementById('chartMaterias');
-            if (cM) {
-                window._chartMaterias = new Chart(cM.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: materias.labels,
-                        datasets: [{
-                            label: 'Solicitudes',
-                            data: materias.values,
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
-                });
+            if (window._chartMain) {
+                window._chartMain.destroy();
             }
 
-            const cT = document.getElementById('chartTemas');
-            if (cT) {
-                window._chartTemas = new Chart(cT.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: temas.labels,
-                        datasets: [{
-                            label: 'Solicitudes',
-                            data: temas.values,
-                            backgroundColor: 'rgba(34, 197, 94, 0.5)',
-                            borderColor: 'rgba(34, 197, 94, 1)',
-                            borderWidth: 1
-                        }]
+            window._chartMain = new Chart(canvas.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: data.title,
+                        data: data.values,
+                        backgroundColor: 'rgba(139, 92, 246, 0.45)',
+                        borderColor: 'rgba(139, 92, 246, 1)',
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        }
                     },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: { beginAtZero: true }
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
                         }
                     }
-                });
-            }
-
-            const cE = document.getElementById('chartEstados');
-            if (cE) {
-                window._chartEstados = new Chart(cE.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: estados.labels,
-                        datasets: [{
-                            label: 'Cantidad',
-                            data: estados.values,
-                            backgroundColor: 'rgba(249, 115, 22, 0.5)',
-                            borderColor: 'rgba(249, 115, 22, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
-                });
-            }
-
-            const cP = document.getElementById('chartProfesores');
-            if (cP) {
-                window._chartProfesores = new Chart(cP.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: profesores.labels,
-                        datasets: [{
-                            label: 'Clases confirmadas',
-                            data: profesores.values,
-                            backgroundColor: 'rgba(168, 85, 247, 0.5)',
-                            borderColor: 'rgba(168, 85, 247, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
-                });
-            }
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            renderCharts();
+            renderMainChart();
 
             if (window.Livewire) {
                 Livewire.on('estadisticas-actualizadas', () => {
-                    setTimeout(() => renderCharts(), 50);
+                    setTimeout(() => renderMainChart(), 80);
                 });
             }
         });
     </script>
-
 </x-filament-panels::page>

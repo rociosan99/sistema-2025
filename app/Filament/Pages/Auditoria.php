@@ -3,7 +3,8 @@
 namespace App\Filament\Pages;
 
 use Filament\Pages\Page;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Spatie\Activitylog\Models\Activity;
 
@@ -19,8 +20,9 @@ class Auditoria extends Page
 
     public ?string $fechaInicio = null;
     public ?string $fechaFin = null;
-    public ?string $tipoAuditoria = '';
     public ?string $modelo = '';
+    public ?string $evento = '';
+    public ?string $buscarUsuario = '';
 
     /** @var array<int, array<string, mixed>> */
     public array $registros = [];
@@ -28,21 +30,87 @@ class Auditoria extends Page
     /** @var array<string, string> */
     public array $modelosOptions = [];
 
+    /** @var array<string, string> */
+    public array $eventosOptions = [];
+
+    /** @var array<string, mixed>|null */
+    public ?array $detalle = null;
+
     public function mount(): void
     {
         $this->fechaFin = now()->toDateString();
         $this->fechaInicio = now()->subDays(30)->toDateString();
-        $this->tipoAuditoria = '';
         $this->modelo = '';
+        $this->evento = '';
+        $this->buscarUsuario = '';
 
         $this->cargarModelosOptions();
+        $this->cargarEventosOptions();
         $this->cargarDatos();
+    }
+
+    public function updated($property): void
+    {
+        if (in_array($property, ['fechaInicio', 'fechaFin', 'modelo', 'evento', 'buscarUsuario'], true)) {
+            if ($this->fechaInicio && $this->fechaFin && $this->fechaInicio <= $this->fechaFin) {
+                $this->cargarDatos();
+            }
+        }
     }
 
     public function aplicarFiltros(): void
     {
         $this->validarFechas();
         $this->cargarDatos();
+    }
+
+    public function verDetalle(int $activityId): void
+    {
+        $activity = Activity::query()->find($activityId);
+
+        if (! $activity) {
+            $this->detalle = null;
+            return;
+        }
+
+        $causer = null;
+
+        if (
+            $activity->causer_type === \App\Models\User::class
+            && $activity->causer_id
+        ) {
+            $causer = \App\Models\User::query()->find($activity->causer_id);
+        }
+
+        $usuario = 'Sistema';
+        $email = '-';
+
+        if ($causer) {
+            $nombreCompleto = trim(((string) $causer->name) . ' ' . ((string) $causer->apellido));
+
+            $usuario = $nombreCompleto !== '' ? $nombreCompleto : ((string) $causer->email ?: 'Sistema');
+            $email = (string) ($causer->email ?? '-');
+        }
+
+        $propiedades = $this->normalizarProperties($activity->properties);
+        $cambios = $this->armarCambios($propiedades);
+
+        $this->detalle = [
+            'id' => (int) $activity->id,
+            'fecha' => $this->formatFecha($activity->created_at),
+            'modelo' => $this->modeloLegible((string) $activity->subject_type),
+            'subject_id' => $activity->subject_id !== null ? (string) $activity->subject_id : '-',
+            'evento' => $this->eventoLegible((string) ($activity->event ?? '')),
+            'descripcion' => $this->descripcionLegible((string) ($activity->description ?? '')),
+            'usuario' => $usuario,
+            'email' => $email,
+            'cambios' => $cambios,
+        ];
+    }
+
+    public function cerrarDetalle(): void
+    {
+        $this->detalle = null;
     }
 
     private function validarFechas(): void
@@ -64,6 +132,7 @@ class Auditoria extends Page
     {
         $rows = Activity::query()
             ->whereNotNull('subject_type')
+            ->where('subject_type', '!=', \App\Models\OfertaSolicitud::class)
             ->select('subject_type')
             ->distinct()
             ->orderBy('subject_type')
@@ -79,6 +148,16 @@ class Auditoria extends Page
         $this->modelosOptions = $options;
     }
 
+    private function cargarEventosOptions(): void
+    {
+        $this->eventosOptions = [
+            '' => 'Todos',
+            'created' => 'Creación',
+            'updated' => 'Actualización',
+            'deleted' => 'Eliminación',
+        ];
+    }
+
     private function cargarDatos(): void
     {
         $query = Activity::query()
@@ -86,27 +165,38 @@ class Auditoria extends Page
                 $join->on('users.id', '=', 'activity_log.causer_id')
                     ->where('activity_log.causer_type', '=', \App\Models\User::class);
             })
-            ->whereBetween(DB::raw('DATE(activity_log.created_at)'), [$this->fechaInicio, $this->fechaFin])
+            ->whereDate('activity_log.created_at', '>=', $this->fechaInicio)
+            ->whereDate('activity_log.created_at', '<=', $this->fechaFin)
+            ->whereNotNull('activity_log.subject_type')
+            ->where('activity_log.subject_type', '!=', \App\Models\OfertaSolicitud::class)
             ->select([
                 'activity_log.id',
                 'activity_log.description',
+                'activity_log.event',
+                'activity_log.created_at',
                 'activity_log.subject_type',
                 'activity_log.subject_id',
-                'activity_log.event',
-                'activity_log.log_name',
-                'activity_log.properties',
-                'activity_log.created_at',
                 'users.name as causer_name',
                 'users.apellido as causer_apellido',
                 'users.email as causer_email',
             ]);
 
-        if ($this->tipoAuditoria !== '') {
-            $query->where('activity_log.log_name', $this->tipoAuditoria);
-        }
-
         if ($this->modelo !== '') {
             $query->where('activity_log.subject_type', $this->modelo);
+        }
+
+        if ($this->evento !== '') {
+            $query->where('activity_log.event', $this->evento);
+        }
+
+        $buscar = trim((string) $this->buscarUsuario);
+
+        if ($buscar !== '') {
+            $query->where(function ($q) use ($buscar) {
+                $q->where('users.name', 'like', "%{$buscar}%")
+                    ->orWhere('users.apellido', 'like', "%{$buscar}%")
+                    ->orWhere('users.email', 'like', "%{$buscar}%");
+            });
         }
 
         $rows = $query
@@ -115,23 +205,45 @@ class Auditoria extends Page
             ->get();
 
         $this->registros = $rows->map(function ($r) {
-            $usuario = trim(((string) ($r->causer_name ?? '')) . ' ' . ((string) ($r->causer_apellido ?? '')));
-            $usuario = $usuario !== '' ? $usuario : '-';
-
-            $properties = $this->formatearProperties($r->properties);
-
             return [
                 'id' => (int) $r->id,
-                'fecha' => optional($r->created_at)?->format('Y-m-d H:i:s') ?? (string) $r->created_at,
-                'descripcion' => $this->descripcionLegible((string) $r->description),
-                'usuario' => $usuario,
+                'modelo' => $this->modeloLegible((string) $r->subject_type),
+                'fecha' => $this->formatFecha($r->created_at),
+                'descripcion' => $this->descripcionLegible((string) ($r->description ?? '')),
+                'usuario' => $this->usuarioLegible(
+                    (string) ($r->causer_name ?? ''),
+                    (string) ($r->causer_apellido ?? ''),
+                    (string) ($r->causer_email ?? '')
+                ),
                 'email' => (string) ($r->causer_email ?? '-'),
-                'registro' => $r->subject_id ? (string) $r->subject_id : '-',
                 'evento' => $this->eventoLegible((string) ($r->event ?? '')),
-                'log' => $this->logLegible((string) ($r->log_name ?? '')),
-                'properties' => $properties,
             ];
         })->all();
+
+        if ($this->detalle !== null && isset($this->detalle['id'])) {
+            $detalleId = (int) $this->detalle['id'];
+            $this->verDetalle($detalleId);
+        }
+    }
+
+    private function modeloLegible(string $subjectType): string
+    {
+        return class_basename($subjectType);
+    }
+
+    private function usuarioLegible(string $name, string $apellido, string $email): string
+    {
+        $usuario = trim($name . ' ' . $apellido);
+
+        if ($usuario !== '') {
+            return $usuario;
+        }
+
+        if ($email !== '') {
+            return $email;
+        }
+
+        return 'Sistema';
     }
 
     private function descripcionLegible(string $value): string
@@ -156,7 +268,9 @@ class Auditoria extends Page
             'pago.webhook_recibido' => 'Webhook de pago recibido',
             'pago.webhook_error' => 'Error en webhook de pago',
 
-            default => str_replace(['_', '.'], ' ', ucfirst($value)),
+            default => $value !== ''
+                ? Str::headline(str_replace(['.', '_'], ' ', $value))
+                : '-',
         };
     }
 
@@ -166,35 +280,82 @@ class Auditoria extends Page
             'created' => 'Creación',
             'updated' => 'Actualización',
             'deleted' => 'Eliminación',
-            default => $value !== '' ? ucfirst($value) : '-',
+            default => $value !== '' ? Str::headline($value) : '-',
         };
     }
 
-    private function logLegible(string $value): string
+    private function formatFecha(mixed $value): string
     {
-        return match ($value) {
-            'audit' => 'Sistema',
-            'business' => 'Negocio',
-            default => $value !== '' ? ucfirst($value) : '-',
-        };
-    }
-
-    private function formatearProperties(mixed $properties): string
-    {
-        if (is_string($properties)) {
-            $decoded = json_decode($properties, true);
-
-            if (json_last_error() === JSON_ERROR_NONE) {
-                $properties = $decoded;
-            }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d H:i:s');
         }
 
-        if (! is_array($properties)) {
+        try {
+            return Carbon::parse((string) $value)->format('Y-m-d H:i:s');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
+    }
+
+    private function normalizarProperties(mixed $properties): array
+    {
+        if ($properties instanceof \Illuminate\Support\Collection) {
+            return $properties->toArray();
+        }
+
+        if (is_array($properties)) {
+            return $properties;
+        }
+
+        if (is_object($properties) && method_exists($properties, 'toArray')) {
+            return $properties->toArray();
+        }
+
+        if (is_string($properties) && trim($properties) !== '') {
+            $decoded = json_decode($properties, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return [];
+    }
+
+    private function armarCambios(array $propiedades): array
+    {
+        $attributes = is_array($propiedades['attributes'] ?? null) ? $propiedades['attributes'] : [];
+        $old = is_array($propiedades['old'] ?? null) ? $propiedades['old'] : [];
+
+        $campos = array_unique(array_merge(array_keys($old), array_keys($attributes)));
+
+        $cambios = [];
+
+        foreach ($campos as $campo) {
+            $antes = array_key_exists($campo, $old) ? $old[$campo] : null;
+            $despues = array_key_exists($campo, $attributes) ? $attributes[$campo] : null;
+
+            $cambios[] = [
+                'campo' => (string) $campo,
+                'antes' => $this->valorAuditable($antes),
+                'despues' => $this->valorAuditable($despues),
+            ];
+        }
+
+        return $cambios;
+    }
+
+    private function valorAuditable(mixed $value): string
+    {
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if ($value === null) {
             return '-';
         }
 
-        $texto = json_encode($properties, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (is_array($value) || is_object($value)) {
+            return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
 
-        return $texto ?: '-';
+        return (string) $value;
     }
 }

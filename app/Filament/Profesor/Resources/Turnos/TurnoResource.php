@@ -20,13 +20,43 @@ class TurnoResource extends Resource
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-calendar-days';
 
     /**
-     * 🔹 Mostrar TODOS los turnos del profesor (historial)
+     * Mostrar todos los turnos del profesor (historial)
+     * y vencer automáticamente los pendientes que ya pasaron.
      */
     public static function getEloquentQuery(): Builder
     {
+        $profesorId = Auth::id();
+
+        static::vencerTurnosPendientesDelProfesor($profesorId);
+
         return parent::getEloquentQuery()
-            ->where('profesor_id', Auth::id())
-            ->orderBy('fecha', 'desc');
+            ->where('profesor_id', $profesorId)
+            ->orderBy('fecha', 'desc')
+            ->orderBy('hora_inicio', 'desc');
+    }
+
+    protected static function vencerTurnosPendientesDelProfesor(?int $profesorId): void
+    {
+        if (! $profesorId) {
+            return;
+        }
+
+        $hoy = now()->toDateString();
+        $horaActual = now()->format('H:i:s');
+
+        Turno::query()
+            ->where('profesor_id', $profesorId)
+            ->where('estado', Turno::ESTADO_PENDIENTE)
+            ->where(function ($query) use ($hoy, $horaActual) {
+                $query->whereDate('fecha', '<', $hoy)
+                    ->orWhere(function ($subQuery) use ($hoy, $horaActual) {
+                        $subQuery->whereDate('fecha', $hoy)
+                            ->where('hora_inicio', '<=', $horaActual);
+                    });
+            })
+            ->update([
+                'estado' => Turno::ESTADO_VENCIDO,
+            ]);
     }
 
     public static function canCreate(): bool

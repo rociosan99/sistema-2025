@@ -7,21 +7,16 @@ use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
 use App\Models\User;
 use BackedEnum;
-
-// Forms
-use Filament\Forms\Components\TextInput;
+use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-
-// Tables
-use Filament\Tables\Table;
 use Filament\Tables\Columns\TextColumn;
-
-// Actions
-use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\BulkAction;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 
 class UserResource extends Resource
 {
@@ -33,9 +28,6 @@ class UserResource extends Resource
     protected static ?string $pluralLabel = 'Usuarios';
     protected static ?string $slug = 'usuarios';
 
-    /**
-     * FORMULARIO (CREATE / EDIT)
-     */
     public static function form(Schema $schema): Schema
     {
         return $schema->schema([
@@ -59,11 +51,20 @@ class UserResource extends Resource
             Select::make('role')
                 ->label('Rol')
                 ->options([
-                    'administrador' => 'Administrador',
-                    'profesor'      => 'Profesor',
-                    'alumno'        => 'Alumno',
+                    'admin' => 'Administrador',
+                    'profesor' => 'Profesor',
+                    'alumno' => 'Alumno',
                 ])
                 ->required(),
+
+            Select::make('activo')
+                ->label('Estado')
+                ->options([
+                    1 => 'Activo',
+                    0 => 'Dado de baja',
+                ])
+                ->required()
+                ->default(1),
 
             TextInput::make('password')
                 ->label('Contraseña')
@@ -75,9 +76,6 @@ class UserResource extends Resource
         ]);
     }
 
-    /**
-     * TABLA
-     */
     public static function table(Table $table): Table
     {
         return $table
@@ -102,6 +100,19 @@ class UserResource extends Resource
 
                 TextColumn::make('role')
                     ->label('Rol')
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'admin' => 'Administrador',
+                        'profesor' => 'Profesor',
+                        'alumno' => 'Alumno',
+                        default => $state,
+                    })
+                    ->sortable(),
+
+                TextColumn::make('activo')
+                    ->label('Estado')
+                    ->formatStateUsing(fn (bool $state): string => $state ? 'Activo' : 'Dado de baja')
+                    ->badge()
+                    ->color(fn (bool $state): string => $state ? 'success' : 'danger')
                     ->sortable(),
 
                 TextColumn::make('created_at')
@@ -110,19 +121,48 @@ class UserResource extends Resource
             ])
             ->recordActions([
                 EditAction::make()->label('Editar'),
-                DeleteAction::make()->label('Eliminar'),
+
+                Action::make('darDeBaja')
+                    ->label('Dar de baja')
+                    ->icon('heroicon-o-no-symbol')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (User $record): bool => $record->activo)
+                    ->action(function (User $record): void {
+                        $record->update(['activo' => false]);
+                    }),
+
+                Action::make('darDeAlta')
+                    ->label('Dar de alta')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (User $record): bool => ! $record->activo)
+                    ->action(function (User $record): void {
+                        $record->update(['activo' => true]);
+                    }),
             ])
             ->groupedBulkActions([
-                BulkAction::make('delete')
-                    ->label('Eliminar seleccionados')
+                BulkAction::make('darDeBajaSeleccionados')
+                    ->label('Dar de baja seleccionados')
                     ->requiresConfirmation()
-                    ->action(fn (\Illuminate\Database\Eloquent\Collection $records) => $records->each->delete()),
+                    ->action(function (Collection $records): void {
+                        $records->each(function (User $record): void {
+                            $record->update(['activo' => false]);
+                        });
+                    }),
+
+                BulkAction::make('darDeAltaSeleccionados')
+                    ->label('Dar de alta seleccionados')
+                    ->requiresConfirmation()
+                    ->action(function (Collection $records): void {
+                        $records->each(function (User $record): void {
+                            $record->update(['activo' => true]);
+                        });
+                    }),
             ]);
     }
 
-    /**
-     * PÁGINAS
-     */
     public static function getPages(): array
     {
         return [
