@@ -66,6 +66,18 @@
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:6px;">
+                    <label style="font-size:12px; font-weight:900;">Rol</label>
+                    <select
+                        wire:model.live="rolUsuario"
+                        style="border:1px solid #d1d5db; border-radius:12px; padding:10px 12px;"
+                    >
+                        @foreach($this->rolesOptions as $valor => $label)
+                            <option value="{{ $valor }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:6px;">
                     <label style="font-size:12px; font-weight:900;">Usuario o email</label>
                     <input
                         type="text"
@@ -163,6 +175,11 @@
                                             {{ $row['email'] }}
                                         </div>
                                     @endif
+                                    @if(($row['rol'] ?? '-') !== '-')
+                                        <div style="font-size:12px; color:#6b7280; margin-top:2px;">
+                                            Rol: {{ $row['rol'] }}
+                                        </div>
+                                    @endif
                                 </td>
 
                                 <td style="padding:10px; border-bottom:1px solid #e5e7eb; white-space:nowrap;">
@@ -239,6 +256,7 @@
                         <div style="font-size:12px; color:#6b7280; font-weight:700;">Usuario</div>
                         <div style="font-size:15px; font-weight:900; margin-top:6px;">{{ $detalle['usuario'] }}</div>
                         <div style="font-size:12px; color:#6b7280; margin-top:4px;">{{ $detalle['email'] }}</div>
+                        <div style="font-size:12px; color:#6b7280; margin-top:4px;">Rol: {{ $detalle['rol'] }}</div>
                     </div>
                 </div>
 

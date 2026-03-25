@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\MailAccessRedirectController;
 use App\Http\Controllers\MercadoPagoController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReporteTurnosExcelController;
@@ -100,6 +101,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reportes/turnos/excel', ReporteTurnosExcelController::class)
         ->name('reportes.turnos.excel');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Acceso desde mails
+|--------------------------------------------------------------------------
+*/
+Route::get('/mail/access', MailAccessRedirectController::class)
+    ->name('mail.access')
+    ->middleware('signed');
 
 /*
 |--------------------------------------------------------------------------

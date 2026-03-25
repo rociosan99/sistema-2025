@@ -7,10 +7,12 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class User extends Authenticatable implements FilamentUser
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, LogsActivity;
 
     protected $fillable = [
         'name',
@@ -37,6 +39,26 @@ class User extends Authenticatable implements FilamentUser
             'password' => 'hashed',
             'activo' => 'boolean',
         ];
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->useLogName('usuarios')
+            ->logOnly([
+                'name',
+                'apellido',
+                'email',
+                'password',
+                'role',
+                'activo',
+                'carrera_activa_id',
+                'profile_photo_path',
+                'google_id',
+                'google_avatar_url',
+            ])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
     }
 
     public function isAdmin(): bool

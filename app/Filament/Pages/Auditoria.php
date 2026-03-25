@@ -23,6 +23,7 @@ class Auditoria extends Page
     public ?string $modelo = '';
     public ?string $evento = '';
     public ?string $buscarUsuario = '';
+    public ?string $rolUsuario = '';
 
     /** @var array<int, array<string, mixed>> */
     public array $registros = [];
@@ -32,6 +33,9 @@ class Auditoria extends Page
 
     /** @var array<string, string> */
     public array $eventosOptions = [];
+
+    /** @var array<string, string> */
+    public array $rolesOptions = [];
 
     /** @var array<string, mixed>|null */
     public ?array $detalle = null;
@@ -43,15 +47,17 @@ class Auditoria extends Page
         $this->modelo = '';
         $this->evento = '';
         $this->buscarUsuario = '';
+        $this->rolUsuario = '';
 
         $this->cargarModelosOptions();
         $this->cargarEventosOptions();
+        $this->cargarRolesOptions();
         $this->cargarDatos();
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['fechaInicio', 'fechaFin', 'modelo', 'evento', 'buscarUsuario'], true)) {
+        if (in_array($property, ['fechaInicio', 'fechaFin', 'modelo', 'evento', 'buscarUsuario', 'rolUsuario'], true)) {
             if ($this->fechaInicio && $this->fechaFin && $this->fechaInicio <= $this->fechaFin) {
                 $this->cargarDatos();
             }
@@ -84,12 +90,14 @@ class Auditoria extends Page
 
         $usuario = 'Sistema';
         $email = '-';
+        $rol = '-';
 
         if ($causer) {
             $nombreCompleto = trim(((string) $causer->name) . ' ' . ((string) $causer->apellido));
 
             $usuario = $nombreCompleto !== '' ? $nombreCompleto : ((string) $causer->email ?: 'Sistema');
             $email = (string) ($causer->email ?? '-');
+            $rol = $this->rolLegible((string) ($causer->role ?? ''));
         }
 
         $propiedades = $this->normalizarProperties($activity->properties);
@@ -104,6 +112,7 @@ class Auditoria extends Page
             'descripcion' => $this->descripcionLegible((string) ($activity->description ?? '')),
             'usuario' => $usuario,
             'email' => $email,
+            'rol' => $rol,
             'cambios' => $cambios,
         ];
     }
@@ -142,7 +151,7 @@ class Auditoria extends Page
 
         foreach ($rows as $subjectType) {
             $subjectType = (string) $subjectType;
-            $options[$subjectType] = class_basename($subjectType);
+            $options[$subjectType] = $this->modeloLegible($subjectType);
         }
 
         $this->modelosOptions = $options;
@@ -155,6 +164,16 @@ class Auditoria extends Page
             'created' => 'Creación',
             'updated' => 'Actualización',
             'deleted' => 'Eliminación',
+        ];
+    }
+
+    private function cargarRolesOptions(): void
+    {
+        $this->rolesOptions = [
+            '' => 'Todos',
+            'admin' => 'Admin',
+            'profesor' => 'Profesor',
+            'alumno' => 'Alumno',
         ];
     }
 
@@ -179,6 +198,7 @@ class Auditoria extends Page
                 'users.name as causer_name',
                 'users.apellido as causer_apellido',
                 'users.email as causer_email',
+                'users.role as causer_role',
             ]);
 
         if ($this->modelo !== '') {
@@ -187,6 +207,10 @@ class Auditoria extends Page
 
         if ($this->evento !== '') {
             $query->where('activity_log.event', $this->evento);
+        }
+
+        if ($this->rolUsuario !== '') {
+            $query->where('users.role', $this->rolUsuario);
         }
 
         $buscar = trim((string) $this->buscarUsuario);
@@ -216,6 +240,7 @@ class Auditoria extends Page
                     (string) ($r->causer_email ?? '')
                 ),
                 'email' => (string) ($r->causer_email ?? '-'),
+                'rol' => $this->rolLegible((string) ($r->causer_role ?? '')),
                 'evento' => $this->eventoLegible((string) ($r->event ?? '')),
             ];
         })->all();
@@ -228,7 +253,13 @@ class Auditoria extends Page
 
     private function modeloLegible(string $subjectType): string
     {
-        return class_basename($subjectType);
+        return match (class_basename($subjectType)) {
+            'User' => 'Usuario',
+            'Turno' => 'Turno',
+            'TurnoReemplazo' => 'Turno reemplazo',
+            'CalificacionProfesor' => 'Calificación profesor',
+            default => class_basename($subjectType),
+        };
     }
 
     private function usuarioLegible(string $name, string $apellido, string $email): string
@@ -244,6 +275,16 @@ class Auditoria extends Page
         }
 
         return 'Sistema';
+    }
+
+    private function rolLegible(string $role): string
+    {
+        return match ($role) {
+            'admin' => 'Admin',
+            'profesor' => 'Profesor',
+            'alumno' => 'Alumno',
+            default => $role !== '' ? Str::headline($role) : '-',
+        };
     }
 
     private function descripcionLegible(string $value): string
