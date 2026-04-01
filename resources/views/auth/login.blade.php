@@ -1,47 +1,48 @@
 <x-guest-layout>
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+    <div style="width:100%; max-width:560px; margin:0 auto;">
+        <div style="background:#ffffff; border:1px solid #e5e7eb; border-radius:18px; padding:32px; box-shadow:0 10px 25px rgba(0,0,0,.06);">
+            <div style="margin-bottom:24px;">
+                <h1 style="margin:0; font-size:28px; font-weight:700; color:#111827;">
+                    Ingresar
+                </h1>
 
-    <form method="POST" action="{{ route('login') }}">
-        @csrf
+                <p style="margin:10px 0 0 0; font-size:14px; color:#6b7280;">
+                    Elegí cómo querés acceder al sistema.
+                </p>
+            </div>
 
-        <!-- Email Address -->
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
-        </div>
-
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
-
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
-
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
-
-        <!-- Remember Me -->
-        <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:focus:ring-indigo-600 dark:focus:ring-offset-gray-800" name="remember">
-                <span class="ms-2 text-sm text-gray-600 dark:text-gray-400">{{ __('Remember me') }}</span>
-            </label>
-        </div>
-
-        <div class="flex items-center justify-end mt-4">
-            @if (Route::has('password.request'))
-                <a class="underline text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
+            <div style="display:flex; flex-direction:column; gap:12px;">
+                <a
+                    href="/admin/login"
+                    style="display:block; width:100%; text-align:center; text-decoration:none; background:#374151; color:#ffffff; padding:14px 16px; border-radius:12px; font-weight:700;"
+                >
+                    Ingresar como administrador
                 </a>
-            @endif
 
-            <x-primary-button class="ms-3">
-                {{ __('Log in') }}
-            </x-primary-button>
+                <a
+                    href="/profesor/login"
+                    style="display:block; width:100%; text-align:center; text-decoration:none; background:#1f2937; color:#ffffff; padding:14px 16px; border-radius:12px; font-weight:700;"
+                >
+                    Ingresar como profesor
+                </a>
+
+                <a
+                    href="/alumno/login"
+                    style="display:block; width:100%; text-align:center; text-decoration:none; background:#111827; color:#ffffff; padding:14px 16px; border-radius:12px; font-weight:700;"
+                >
+                    Ingresar como alumno
+                </a>
+            </div>
+
+            <div style="margin-top:24px; padding-top:16px; border-top:1px solid #e5e7eb; font-size:14px; color:#6b7280;">
+                ¿No tenés cuenta?
+                <a
+                    href="{{ route('register') }}"
+                    style="font-weight:700; color:#4f46e5; text-decoration:none;"
+                >
+                    Registrate acá
+                </a>
+            </div>
         </div>
-    </form>
+    </div>
 </x-guest-layout>

@@ -33,6 +33,26 @@ Route::get('/', function () {
 
 /*
 |--------------------------------------------------------------------------
+| Dashboard (compatibilidad con Breeze / tests)
+|--------------------------------------------------------------------------
+*/
+Route::get('/dashboard', function () {
+    if (! Auth::check()) {
+        return redirect('/login');
+    }
+
+    $role = Auth::user()?->role;
+
+    return match ($role) {
+        'admin'    => redirect('/admin'),
+        'profesor' => redirect('/profesor'),
+        'alumno'   => redirect('/alumno'),
+        default    => redirect('/'),
+    };
+})->middleware('auth')->name('dashboard');
+
+/*
+|--------------------------------------------------------------------------
 | Google OAuth
 |--------------------------------------------------------------------------
 */

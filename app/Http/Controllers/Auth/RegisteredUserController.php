@@ -23,28 +23,24 @@ class RegisteredUserController extends Controller
     {
         $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'apellido' => ['required', 'string', 'max:255'],
+            'apellido' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:' . User::class],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role' => ['required', 'in:admin,profesor,alumno'],
+            'role' => ['nullable', 'in:admin,profesor,alumno'],
         ]);
 
         $user = User::create([
             'name' => $request->name,
-            'apellido' => $request->apellido,
+            'apellido' => $request->input('apellido', ''),
             'email' => $request->email,
             'password' => Hash::make($request->password),
-            'role' => $request->role,
+            'role' => $request->input('role', 'alumno'),
+            'activo' => true,
         ]);
 
         event(new Registered($user));
         Auth::login($user);
 
-        return match ($user->role) {
-            'admin'    => redirect('/admin'),
-            'profesor' => redirect('/profesor'),
-            'alumno'   => redirect('/alumno'),
-            default    => redirect('/'),
-        };
+        return redirect(route('dashboard', absolute: false));
     }
 }
