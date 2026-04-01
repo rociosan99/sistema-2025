@@ -22,16 +22,15 @@ class MercadoPagoService
     {
         $turno->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
 
-        // ✅ Blindaje: si vino sin precio_total, intentamos calcularlo desde profesor_materia
-        if (empty($turno->precio_total) || (float)$turno->precio_total <= 0) {
+        if (empty($turno->precio_total) || (float) $turno->precio_total <= 0) {
             $precioPorHora = (float) DB::table('profesor_materia')
                 ->where('profesor_id', $turno->profesor_id)
                 ->where('materia_id', $turno->materia_id)
                 ->value('precio_por_hora');
 
             if ($precioPorHora > 0) {
-                $inicio = Carbon::createFromFormat('H:i:s', substr((string)$turno->hora_inicio, 0, 8));
-                $fin    = Carbon::createFromFormat('H:i:s', substr((string)$turno->hora_fin, 0, 8));
+                $inicio = Carbon::createFromFormat('H:i:s', substr((string) $turno->hora_inicio, 0, 8));
+                $fin    = Carbon::createFromFormat('H:i:s', substr((string) $turno->hora_fin, 0, 8));
                 $horas  = $inicio->diffInMinutes($fin) / 60;
 
                 $turno->update([
@@ -61,6 +60,20 @@ class MercadoPagoService
         $externalReference = "turno:{$turno->id}";
         $client = new PreferenceClient();
 
+        $successUrl = $this->buildAbsoluteUrl('/alumno/turnos');
+        $failureUrl = $this->buildAbsoluteUrl(route('mp.failure', ['turno' => $turno->id], false));
+        $pendingUrl = $this->buildAbsoluteUrl(route('mp.pending', ['turno' => $turno->id], false));
+        $webhookUrl = $this->buildAbsoluteUrl(route('mp.webhook', [], false));
+
+        Log::info('MP preference URLs generadas', [
+            'turno_id' => $turno->id,
+            'success' => $successUrl,
+            'failure' => $failureUrl,
+            'pending' => $pendingUrl,
+            'webhook' => $webhookUrl,
+            'app_url' => config('app.url'),
+        ]);
+
         try {
             $preference = $client->create([
                 "items" => [[
@@ -77,13 +90,13 @@ class MercadoPagoService
                 ],
                 "external_reference" => $externalReference,
                 "back_urls" => [
-                    "success" => route('mp.success', ['turno' => $turno->id]),
-                    "failure" => route('mp.failure', ['turno' => $turno->id]),
-                    "pending" => route('mp.pending', ['turno' => $turno->id]),
+                    "success" => $successUrl,
+                    "failure" => $failureUrl,
+                    "pending" => $pendingUrl,
                 ],
-                "notification_url" => route('mp.webhook'),
+                "auto_return" => "approved",
+                "notification_url" => $webhookUrl,
             ]);
-
         } catch (MPApiException $e) {
             $response = $e->getApiResponse();
             $status   = $response?->getStatusCode();
@@ -93,6 +106,10 @@ class MercadoPagoService
                 'turno_id' => $turno->id,
                 'status' => $status,
                 'content' => $content,
+                'success_url' => $successUrl,
+                'failure_url' => $failureUrl,
+                'pending_url' => $pendingUrl,
+                'webhook_url' => $webhookUrl,
             ]);
 
             throw new \RuntimeException(
@@ -105,6 +122,10 @@ class MercadoPagoService
             Log::error('MercadoPago UNKNOWN error', [
                 'turno_id' => $turno->id,
                 'message' => $e->getMessage(),
+                'success_url' => $successUrl,
+                'failure_url' => $failureUrl,
+                'pending_url' => $pendingUrl,
+                'webhook_url' => $webhookUrl,
             ]);
 
             throw $e;
@@ -122,5 +143,20 @@ class MercadoPagoService
                 'external_reference' => $externalReference,
             ]
         );
+    }
+
+    private function buildAbsoluteUrl(string $path): string
+    {
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+
+        if ($appUrl !== '') {
+            return $appUrl . '/' . ltrim($path, '/');
+        }
+
+        return url($path);
     }
 }

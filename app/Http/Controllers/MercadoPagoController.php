@@ -28,7 +28,7 @@ class MercadoPagoController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // ✅ NUEVO: no permitir pagar un turno cancelado
+            // ✅ no permitir pagar un turno cancelado
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
                 abort(403, 'Este turno está cancelado.');
             }
@@ -48,9 +48,10 @@ class MercadoPagoController extends Controller
             $pagoExistente = $turno->pago;
 
             if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
-
-                // ✅ NUEVO: si el turno fue cancelado, NO lo volvemos a confirmar
-                if ($turno->estado !== Turno::ESTADO_CANCELADO && $turno->estado !== Turno::ESTADO_CONFIRMADO) {
+                if (
+                    $turno->estado !== Turno::ESTADO_CANCELADO &&
+                    $turno->estado !== Turno::ESTADO_CONFIRMADO
+                ) {
                     $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
                 }
 
@@ -87,7 +88,6 @@ class MercadoPagoController extends Controller
 
             $pago = $mp->crearLinkDePagoParaTurno($turno);
 
-            // ✅ AUDITORÍA “pago.link_creado”
             $audit->log('pago.link_creado', $turno, [
                 'turno_id' => $turno->id,
                 'pago_id' => $pago->pago_id ?? null,
@@ -124,7 +124,7 @@ class MercadoPagoController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // ✅ NUEVO: no permitir pagar un turno cancelado (desde mail)
+            // ✅ no permitir pagar un turno cancelado (desde mail)
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
                 return view('turnos.confirmacion-resultado', [
                     'titulo'  => 'No disponible',
@@ -146,9 +146,10 @@ class MercadoPagoController extends Controller
             $pagoExistente = $turno->pago;
 
             if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
-
-                // ✅ NUEVO: si el turno fue cancelado, NO lo volvemos a confirmar
-                if ($turno->estado !== Turno::ESTADO_CANCELADO && $turno->estado !== Turno::ESTADO_CONFIRMADO) {
+                if (
+                    $turno->estado !== Turno::ESTADO_CANCELADO &&
+                    $turno->estado !== Turno::ESTADO_CONFIRMADO
+                ) {
                     $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
                 }
 
@@ -203,19 +204,11 @@ class MercadoPagoController extends Controller
     {
         $paymentId = $request->query('payment_id');
 
-        if (! $paymentId) {
-            return view('turnos.confirmacion-resultado', [
-                'titulo'  => 'Volviste al sistema',
-                'mensaje' => 'Si el pago se aprobó, el turno se actualizará automáticamente (webhook). Si no cambia, intentá de nuevo desde “Pagar”.',
-            ]);
+        if ($paymentId) {
+            $this->procesarPagoDesdeMercadoPago((string) $paymentId, $turno);
         }
 
-        $resultado = $this->procesarPagoDesdeMercadoPago((string) $paymentId, $turno);
-
-        return view('turnos.confirmacion-resultado', [
-            'titulo'  => $resultado['titulo'],
-            'mensaje' => $resultado['mensaje'],
-        ]);
+        return redirect('/alumno/turnos');
     }
 
     public function failure(Turno $turno)
@@ -244,7 +237,6 @@ class MercadoPagoController extends Controller
             'payload' => $request->all(),
         ]);
 
-        // ✅ AUDITORÍA: webhook recibido (sin subject todavía)
         $audit->log('pago.webhook_recibido', null, [
             'payload' => $request->all(),
         ], null);
@@ -333,8 +325,6 @@ class MercadoPagoController extends Controller
             $paymentClient = new PaymentClient();
             $payment = $paymentClient->get((int) $paymentId);
 
-            // acá no tenemos AuditLogger, porque este método es usado en "success"
-            // y el estado real lo termina de confirmar webhook. Está bien así.
             return $this->procesarPagoDesdeObjetoMP($payment, $turno, null);
         } catch (MPApiException $e) {
             Log::error('MPApiException al consultar pago', [
@@ -364,7 +354,7 @@ class MercadoPagoController extends Controller
 
     /**
      * Procesa pago desde objeto MP.
-     * Si $audit es null, no registra auditoría (para back_url success).
+     * Si $audit es null, no registra auditoría.
      */
     private function procesarPagoDesdeObjetoMP(object $payment, Turno $turno, ?AuditLogger $audit): array
     {
@@ -429,12 +419,8 @@ class MercadoPagoController extends Controller
             ]);
         }
 
-        // ✅ CAMBIO CLAVE: si llega "approved" pero el turno ya está cancelado,
-        // NO lo volvemos a confirmado.
         if ($status === 'approved') {
-
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
-
                 if ($audit) {
                     $audit->log('pago.aprobado_turno_cancelado_no_se_confirma', $turno, [
                         'turno_id' => $turno->id,
