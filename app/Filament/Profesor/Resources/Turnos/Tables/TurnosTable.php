@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use Carbon\CarbonInterface;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\TextInput;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -68,15 +69,27 @@ class TurnosTable
                         }
 
                         return match ($state) {
-                            Turno::ESTADO_PENDIENTE => 'Pendiente',
+                            Turno::ESTADO_PENDIENTE      => 'Pendiente',
                             Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
-                            Turno::ESTADO_CONFIRMADO => 'Clase pagada',
-                            Turno::ESTADO_RECHAZADO => 'Rechazado',
-                            Turno::ESTADO_CANCELADO => 'Cancelado',
-                            Turno::ESTADO_VENCIDO => 'Vencido',
+                            Turno::ESTADO_CONFIRMADO     => 'Clase pagada',
+                            Turno::ESTADO_RECHAZADO      => 'Rechazado',
+                            Turno::ESTADO_CANCELADO      => 'Cancelado',
+                            Turno::ESTADO_VENCIDO        => 'Vencido',
+                            Turno::ESTADO_ACEPTADO       => 'Aceptado (legacy)',
                             default => $state ? ucfirst((string) $state) : '-',
                         };
                     }),
+
+                TextColumn::make('enlace_clase')
+                    ->label('Enlace')
+                    ->placeholder('-')
+                    ->limit(35)
+                    ->tooltip(fn ($state) => $state)
+                    ->url(fn ($state) => filled($state) ? $state : null)
+                    ->openUrlInNewTab()
+                    ->copyable()
+                    ->copyMessage('Enlace copiado')
+                    ->toggleable(),
             ])
 
             ->filtersLayout(FiltersLayout::AboveContentCollapsible)
@@ -142,12 +155,19 @@ class TurnosTable
                 Action::make('aceptar')
                     ->label('Aceptar')
                     ->color('primary')
-                    ->requiresConfirmation()
+                    ->form([
+                        TextInput::make('enlace_clase')
+                            ->label('Enlace de la clase')
+                            ->placeholder('https://meet.google.com/... o https://zoom.us/...')
+                            ->required()
+                            ->url()
+                            ->maxLength(2048),
+                    ])
                     ->visible(fn (Turno $record) =>
                         $record->estado === Turno::ESTADO_PENDIENTE &&
                         ! self::estaVencido($record)
                     )
-                    ->action(function (Turno $record) {
+                    ->action(function (Turno $record, array $data) {
                         if (self::marcarComoVencidoSiCorresponde($record)) {
                             return;
                         }
@@ -159,6 +179,7 @@ class TurnosTable
 
                         $record->update([
                             'estado' => Turno::ESTADO_PENDIENTE_PAGO,
+                            'enlace_clase' => trim((string) $data['enlace_clase']),
                         ]);
 
                         $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
@@ -169,6 +190,7 @@ class TurnosTable
                             'alumno_id' => $record->alumno_id,
                             'estado_anterior' => $estadoAntes,
                             'estado_nuevo' => Turno::ESTADO_PENDIENTE_PAGO,
+                            'enlace_clase' => $record->enlace_clase,
                             'fecha' => (string) $record->fecha,
                             'hora_inicio' => (string) $record->hora_inicio,
                             'hora_fin' => (string) $record->hora_fin,
@@ -178,6 +200,44 @@ class TurnosTable
                         if ($emailAlumno) {
                             Mail::to($emailAlumno)->send(new ProfesorRespondioTurno($record));
                         }
+                    }),
+
+                Action::make('editarEnlace')
+                    ->label('Editar enlace')
+                    ->color('gray')
+                    ->form([
+                        TextInput::make('enlace_clase')
+                            ->label('Enlace de la clase')
+                            ->placeholder('https://meet.google.com/... o https://zoom.us/...')
+                            ->required()
+                            ->url()
+                            ->maxLength(2048)
+                            ->default(fn (Turno $record) => $record->enlace_clase),
+                    ])
+                    ->visible(fn (Turno $record) =>
+                        in_array($record->estado, [
+                            Turno::ESTADO_PENDIENTE_PAGO,
+                            Turno::ESTADO_CONFIRMADO,
+                            Turno::ESTADO_ACEPTADO,
+                        ], true)
+                    )
+                    ->action(function (Turno $record, array $data) {
+                        /** @var AuditLogger $audit */
+                        $audit = app(AuditLogger::class);
+
+                        $enlaceAnterior = $record->enlace_clase;
+
+                        $record->update([
+                            'enlace_clase' => trim((string) $data['enlace_clase']),
+                        ]);
+
+                        $audit->log('turno.enlace_clase_actualizado', $record, [
+                            'turno_id' => $record->id,
+                            'profesor_id' => $record->profesor_id,
+                            'alumno_id' => $record->alumno_id,
+                            'enlace_anterior' => $enlaceAnterior,
+                            'enlace_nuevo' => $record->enlace_clase,
+                        ]);
                     }),
 
                 Action::make('rechazar')
