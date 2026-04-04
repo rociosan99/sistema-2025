@@ -60,7 +60,8 @@ class MercadoPagoService
         $externalReference = "turno:{$turno->id}";
         $client = new PreferenceClient();
 
-        $successUrl = $this->buildAbsoluteUrl('/alumno/turnos');
+        // OJO: el success vuelve a tu controller, procesa el payment_id y recién después redirige a turnos.
+        $successUrl = $this->buildAbsoluteUrl(route('mp.success', ['turno' => $turno->id], false));
         $failureUrl = $this->buildAbsoluteUrl(route('mp.failure', ['turno' => $turno->id], false));
         $pendingUrl = $this->buildAbsoluteUrl(route('mp.pending', ['turno' => $turno->id], false));
         $webhookUrl = $this->buildAbsoluteUrl(route('mp.webhook', [], false));
@@ -76,26 +77,26 @@ class MercadoPagoService
 
         try {
             $preference = $client->create([
-                "items" => [[
-                    "id" => (string) $turno->id,
-                    "title" => "Clase - " . ($turno->materia?->materia_nombre ?? 'Materia'),
-                    "description" => "Turno {$turno->fecha_formateada} {$turno->horario} con {$turno->profesor?->name}",
-                    "currency_id" => config('services.mercadopago.currency', 'ARS'),
-                    "quantity" => 1,
-                    "unit_price" => $precio,
+                'items' => [[
+                    'id' => (string) $turno->id,
+                    'title' => 'Clase - ' . ($turno->materia?->materia_nombre ?? 'Materia'),
+                    'description' => "Turno {$turno->fecha_formateada} {$turno->horario} con {$turno->profesor?->name}",
+                    'currency_id' => config('services.mercadopago.currency', 'ARS'),
+                    'quantity' => 1,
+                    'unit_price' => $precio,
                 ]],
-                "payer" => [
-                    "name" => $turno->alumno?->name,
-                    "email" => $turno->alumno?->email,
+                'payer' => [
+                    'name' => $turno->alumno?->name,
+                    'email' => $turno->alumno?->email,
                 ],
-                "external_reference" => $externalReference,
-                "back_urls" => [
-                    "success" => $successUrl,
-                    "failure" => $failureUrl,
-                    "pending" => $pendingUrl,
+                'external_reference' => $externalReference,
+                'back_urls' => [
+                    'success' => $successUrl,
+                    'failure' => $failureUrl,
+                    'pending' => $pendingUrl,
                 ],
-                "auto_return" => "approved",
-                "notification_url" => $webhookUrl,
+                'auto_return' => 'approved',
+                'notification_url' => $webhookUrl,
             ]);
         } catch (MPApiException $e) {
             $response = $e->getApiResponse();

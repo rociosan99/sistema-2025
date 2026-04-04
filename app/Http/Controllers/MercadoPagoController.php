@@ -22,13 +22,11 @@ class MercadoPagoController extends Controller
     public function pagar(Turno $turno, MercadoPagoService $mp, AuditLogger $audit)
     {
         return DB::transaction(function () use ($turno, $mp, $audit) {
-
             $turno = Turno::query()
                 ->whereKey($turno->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // ✅ no permitir pagar un turno cancelado
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
                 abort(403, 'Este turno está cancelado.');
             }
@@ -118,13 +116,11 @@ class MercadoPagoController extends Controller
         }
 
         return DB::transaction(function () use ($turno, $mp, $audit) {
-
             $turno = Turno::query()
                 ->whereKey($turno->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            // ✅ no permitir pagar un turno cancelado (desde mail)
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
                 return view('turnos.confirmacion-resultado', [
                     'titulo'  => 'No disponible',
@@ -202,10 +198,10 @@ class MercadoPagoController extends Controller
 
     public function success(Request $request, Turno $turno)
     {
-        $paymentId = $request->query('payment_id');
+        $paymentId = (string) $request->query('payment_id', '');
 
-        if ($paymentId) {
-            $this->procesarPagoDesdeMercadoPago((string) $paymentId, $turno);
+        if ($paymentId !== '') {
+            $this->procesarPagoDesdeMercadoPago($paymentId, $turno);
         }
 
         return redirect('/alumno/turnos');
@@ -241,16 +237,11 @@ class MercadoPagoController extends Controller
             'payload' => $request->all(),
         ], null);
 
-        $paymentId =
-            $request->input('data.id') ??
-            ($request->input('data')['id'] ?? null) ??
-            $request->input('id');
-
-        if (! $paymentId && $request->filled('resource')) {
-            if (preg_match('~/payments/(\d+)~', (string) $request->input('resource'), $m)) {
-                $paymentId = $m[1];
-            }
+        if ($this->debeIgnorarWebhook($request)) {
+            return response()->json(['ok' => true, 'ignored' => true, 'reason' => 'non_payment_event']);
         }
+
+        $paymentId = $this->extraerPaymentIdDesdeWebhook($request);
 
         if (! $paymentId) {
             return response()->json(['ok' => true, 'ignored' => true, 'reason' => 'no_payment_id']);
@@ -284,7 +275,6 @@ class MercadoPagoController extends Controller
             }
 
             return DB::transaction(function () use ($payment, $turnoId, $audit) {
-
                 $turno = Turno::query()
                     ->whereKey($turnoId)
                     ->lockForUpdate()
@@ -325,7 +315,14 @@ class MercadoPagoController extends Controller
             $paymentClient = new PaymentClient();
             $payment = $paymentClient->get((int) $paymentId);
 
-            return $this->procesarPagoDesdeObjetoMP($payment, $turno, null);
+            return DB::transaction(function () use ($payment, $turno) {
+                $turnoBloqueado = Turno::query()
+                    ->whereKey($turno->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                return $this->procesarPagoDesdeObjetoMP($payment, $turnoBloqueado, null);
+            });
         } catch (MPApiException $e) {
             Log::error('MPApiException al consultar pago', [
                 'payment_id' => $paymentId,
@@ -384,29 +381,80 @@ class MercadoPagoController extends Controller
             ];
         }
 
+        $pagoExistente = Pago::query()
+            ->where('turno_id', $turno->id)
+            ->lockForUpdate()
+            ->first();
+
+        // Idempotencia fuerte:
+        // si ya hay un pago aprobado para este turno, no lo volvemos a pisar.
+        if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
+            if (
+                ! empty($pagoExistente->mp_payment_id) &&
+                $pagoExistente->mp_payment_id !== $paymentId
+            ) {
+                Log::warning('Conflicto de mp_payment_id para turno ya aprobado', [
+                    'turno_id' => $turno->id,
+                    'pago_id' => $pagoExistente->pago_id,
+                    'mp_payment_id_guardado' => $pagoExistente->mp_payment_id,
+                    'mp_payment_id_recibido' => $paymentId,
+                ]);
+
+                if ($audit) {
+                    $audit->log('pago.payment_id_conflicto', $turno, [
+                        'turno_id' => $turno->id,
+                        'pago_id' => $pagoExistente->pago_id,
+                        'mp_payment_id_guardado' => $pagoExistente->mp_payment_id,
+                        'mp_payment_id_recibido' => $paymentId,
+                        'mp_status_recibido' => $status,
+                        'mp_status_detail_recibido' => $statusDetail,
+                    ]);
+                }
+            }
+
+            if (
+                $turno->estado !== Turno::ESTADO_CANCELADO &&
+                $turno->estado !== Turno::ESTADO_CONFIRMADO
+            ) {
+                $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
+            }
+
+            return [
+                'titulo'  => 'Pago aprobado',
+                'mensaje' => 'El pago ya había sido procesado para este turno.',
+                'status'  => 'approved',
+            ];
+        }
+
         $detalle = json_decode(json_encode($payment), true);
 
-        $pago = Pago::updateOrCreate(
-            ['turno_id' => $turno->id],
-            [
-                'monto'              => $turno->precio_total,
-                'moneda'             => config('services.mercadopago.currency', 'ARS'),
-                'provider'           => 'mercadopago',
-                'mp_payment_id'      => $paymentId,
-                'mp_status'          => $status,
-                'mp_status_detail'   => $statusDetail,
-                'mp_payment_type'    => (string) ($payment->payment_type_id ?? ''),
-                'mp_payment_method'  => (string) ($payment->payment_method_id ?? ''),
-                'detalle_externo'    => $detalle,
-                'external_reference' => $externalRef,
-                'fecha_aprobado'     => $status === 'approved' ? Carbon::now() : null,
-                'estado'             => match ($status) {
-                    'approved' => Pago::ESTADO_APROBADO,
-                    'rejected' => Pago::ESTADO_RECHAZADO,
-                    default    => Pago::ESTADO_PENDIENTE,
-                },
-            ]
-        );
+        $payloadPago = [
+            'turno_id'            => $turno->id,
+            'monto'               => $turno->precio_total,
+            'moneda'              => config('services.mercadopago.currency', 'ARS'),
+            'provider'            => 'mercadopago',
+            'mp_payment_id'       => $paymentId,
+            'mp_status'           => $status,
+            'mp_status_detail'    => $statusDetail,
+            'mp_payment_type'     => (string) ($payment->payment_type_id ?? ''),
+            'mp_payment_method'   => (string) ($payment->payment_method_id ?? ''),
+            'detalle_externo'     => $detalle,
+            'external_reference'  => $externalRef,
+            'fecha_aprobado'      => $status === 'approved' ? Carbon::now() : null,
+            'estado'              => match ($status) {
+                'approved' => Pago::ESTADO_APROBADO,
+                'rejected' => Pago::ESTADO_RECHAZADO,
+                default    => Pago::ESTADO_PENDIENTE,
+            },
+        ];
+
+        if ($pagoExistente) {
+            $pagoExistente->fill($payloadPago);
+            $pagoExistente->save();
+            $pago = $pagoExistente;
+        } else {
+            $pago = Pago::create($payloadPago);
+        }
 
         if ($audit) {
             $audit->log('pago.estado_actualizado', $turno, [
@@ -438,17 +486,19 @@ class MercadoPagoController extends Controller
                 ];
             }
 
-            $estadoAntes = $turno->estado;
-            $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
+            if ($turno->estado !== Turno::ESTADO_CONFIRMADO) {
+                $estadoAntes = $turno->estado;
+                $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
 
-            if ($audit) {
-                $audit->log('pago.aprobado', $turno, [
-                    'turno_id' => $turno->id,
-                    'estado_turno_anterior' => $estadoAntes,
-                    'estado_turno_nuevo' => Turno::ESTADO_CONFIRMADO,
-                    'mp_payment_id' => $paymentId,
-                    'monto' => (float) $turno->precio_total,
-                ]);
+                if ($audit) {
+                    $audit->log('pago.aprobado', $turno, [
+                        'turno_id' => $turno->id,
+                        'estado_turno_anterior' => $estadoAntes,
+                        'estado_turno_nuevo' => Turno::ESTADO_CONFIRMADO,
+                        'mp_payment_id' => $paymentId,
+                        'monto' => (float) $turno->precio_total,
+                    ]);
+                }
             }
 
             return [
@@ -458,7 +508,25 @@ class MercadoPagoController extends Controller
             ];
         }
 
-        if ($turno->estado !== Turno::ESTADO_PENDIENTE_PAGO) {
+        // No degradar estados finales por webhooks tardíos
+        if (in_array($turno->estado, [
+            Turno::ESTADO_CANCELADO,
+            Turno::ESTADO_VENCIDO,
+            Turno::ESTADO_CONFIRMADO,
+        ], true)) {
+            return [
+                'titulo' => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
+                'mensaje' => $status === 'rejected'
+                    ? 'El pago fue rechazado. El turno ya tenía un estado final y no fue modificado.'
+                    : 'El pago quedó pendiente. El turno ya tenía un estado final y no fue modificado.',
+                'status' => $status,
+            ];
+        }
+
+        if (in_array($turno->estado, [
+            Turno::ESTADO_PENDIENTE,
+            Turno::ESTADO_ACEPTADO,
+        ], true)) {
             $turno->update(['estado' => Turno::ESTADO_PENDIENTE_PAGO]);
         }
 
@@ -477,5 +545,46 @@ class MercadoPagoController extends Controller
                 : 'El pago quedó pendiente. Cuando se apruebe, se actualizará automáticamente.',
             'status' => $status,
         ];
+    }
+
+    private function debeIgnorarWebhook(Request $request): bool
+    {
+        $type = (string) ($request->input('type') ?? $request->input('topic') ?? '');
+        $action = (string) ($request->input('action') ?? '');
+        $resource = (string) ($request->input('resource') ?? '');
+
+        if ($type !== '' && $type !== 'payment') {
+            return true;
+        }
+
+        if ($action !== '' && str_contains($action, 'merchant_order')) {
+            return true;
+        }
+
+        if ($resource !== '' && str_contains($resource, '/merchant_orders/')) {
+            return true;
+        }
+
+        if ($type === '' && $resource !== '' && ! str_contains($resource, '/payments/')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function extraerPaymentIdDesdeWebhook(Request $request): ?string
+    {
+        $paymentId =
+            $request->input('data.id') ??
+            ($request->input('data')['id'] ?? null) ??
+            $request->input('id');
+
+        if (! $paymentId && $request->filled('resource')) {
+            if (preg_match('~/payments/(\d+)~', (string) $request->input('resource'), $m)) {
+                $paymentId = $m[1];
+            }
+        }
+
+        return $paymentId ? (string) $paymentId : null;
     }
 }

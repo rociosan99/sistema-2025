@@ -328,7 +328,6 @@
                         </div>
 
                     @else
-                        {{-- cards de slots (igual que ya tenías) --}}
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px;">
                             @foreach($slots as $i => $s)
                                 @php
@@ -407,15 +406,6 @@
                                                     <span style="opacity:.75;">Precio por hora:</span>
                                                     <span style="font-weight:900;">
                                                         ${{ number_format((float) $s['precio_por_hora'], 0, ',', '.') }}
-                                                    </span>
-                                                </div>
-                                            @endif
-
-                                            @if(!empty($s['precio_total']))
-                                                <div style="margin-top:2px; font-size:12px; color:#111827;">
-                                                    <span style="opacity:.75;">Precio del turno:</span>
-                                                    <span style="font-weight:900;">
-                                                        ${{ number_format((float) $s['precio_total'], 0, ',', '.') }}
                                                     </span>
                                                 </div>
                                             @endif
