@@ -42,13 +42,13 @@
     $yaFinalizo = $finTurno ? $ahora->gte($finTurno) : false;
 
     $estado = (string) $record->estado;
+    $enlaceClase = trim((string) ($record->enlace_clase ?? ''));
 
     $estaCancelado = $estado === Turno::ESTADO_CANCELADO;
     $estaRechazado = $estado === Turno::ESTADO_RECHAZADO;
     $estaConfirmado = $estado === Turno::ESTADO_CONFIRMADO;
     $estaVencidoEstado = $estado === Turno::ESTADO_VENCIDO;
 
-    // Si nunca se confirmó y ya llegó/pasó la hora de inicio, se considera vencido
     $vencidoPorHora = in_array($estado, [
         Turno::ESTADO_PENDIENTE,
         Turno::ESTADO_ACEPTADO,
@@ -74,6 +74,8 @@
         Turno::ESTADO_PENDIENTE_PAGO,
         Turno::ESTADO_CONFIRMADO,
     ], true) && ! $yaEmpezo && ! $estaVencido && ($horasHastaInicio >= $horasRegla);
+
+    $puedeVerEnlace = $estaConfirmado && $enlaceClase !== '';
 @endphp
 
 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -128,5 +130,20 @@
                 ❌ Cancelar clase
             </button>
         </form>
+    @endif
+
+    @if($puedeVerEnlace)
+        <a
+            href="{{ $enlaceClase }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; background:#7c3aed; color:#fff; font-size:12px; font-weight:700; text-decoration:none;"
+        >
+            🔗 Enlace de clase
+        </a>
+    @elseif($estado === Turno::ESTADO_PENDIENTE_PAGO && $enlaceClase !== '')
+        <span style="font-size:12px; font-weight:700; color:#6b7280;">
+            🔒 El enlace se habilita cuando se acredita el pago
+        </span>
     @endif
 </div>

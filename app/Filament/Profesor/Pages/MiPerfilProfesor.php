@@ -2,10 +2,13 @@
 
 namespace App\Filament\Profesor\Pages;
 
+use App\Models\Ciudad;
 use App\Models\Materia;
+use App\Models\Pais;
+use App\Models\ProfesorProfile;
+use App\Models\Provincia;
 use App\Models\Tema;
 use App\Models\User;
-use App\Models\ProfesorProfile;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -27,32 +30,28 @@ class MiPerfilProfesor extends Page
 
     public bool $isEditing = false;
 
-    // Usuario
     public string $name = '';
     public string $apellido = '';
     public string $email = '';
 
-    // Foto
     public $foto = null;
     public ?string $profilePhotoUrl = null;
 
-    // Perfil profesional
-    public ?string $ciudad = null;
+    public ?int $pais_id = null;
+    public ?int $provincia_id = null;
+    public ?int $ciudad_id = null;
+
     public ?string $bio = null;
     public ?int $experiencia_anios = null;
-    public ?string $nivel = null; // junior|semi|senior
+    public ?string $nivel = null;
     public ?float $precio_por_hora_default = null;
-
-    // Título profesional
     public ?string $titulo_profesional = null;
 
-    // Materias
     public string $materiaQuery = '';
     public array $materiaResultados = [];
     public array $materiasIds = [];
     public array $materiasPrecios = [];
 
-    // Temas
     public string $temaQuery = '';
     public array $temaResultados = [];
     public array $temasIds = [];
@@ -86,7 +85,12 @@ class MiPerfilProfesor extends Page
             'user_id' => $user->id,
         ]);
 
-        $this->ciudad = $profile->ciudad;
+        $profile->loadMissing('ciudadItem.provincia.pais');
+
+        $this->ciudad_id = $profile->ciudad_id ? (int) $profile->ciudad_id : null;
+        $this->provincia_id = $profile->ciudadItem?->provincia_id ? (int) $profile->ciudadItem->provincia_id : null;
+        $this->pais_id = $profile->ciudadItem?->provincia?->pais_id ? (int) $profile->ciudadItem->provincia->pais_id : null;
+
         $this->bio = $profile->bio;
         $this->experiencia_anios = $profile->experiencia_anios;
         $this->nivel = $profile->nivel;
@@ -95,7 +99,6 @@ class MiPerfilProfesor extends Page
             : null;
         $this->titulo_profesional = $profile->titulo_profesional;
 
-        // Materias + precio_por_hora
         $this->materiasIds = $user->materias()
             ->pluck('materias.materia_id')
             ->map(fn ($v) => (int) $v)
@@ -108,13 +111,11 @@ class MiPerfilProfesor extends Page
                 : null;
         }
 
-        // Temas
         $this->temasIds = $user->temas()
             ->pluck('temas.tema_id')
             ->map(fn ($v) => (int) $v)
             ->toArray();
 
-        // Reset UI
         $this->materiaQuery = '';
         $this->materiaResultados = [];
         $this->temaQuery = '';
@@ -131,6 +132,17 @@ class MiPerfilProfesor extends Page
     {
         $this->cargarDesdeDB();
         $this->isEditing = false;
+    }
+
+    public function updatedPaisId(): void
+    {
+        $this->provincia_id = null;
+        $this->ciudad_id = null;
+    }
+
+    public function updatedProvinciaId(): void
+    {
+        $this->ciudad_id = null;
     }
 
     public function eliminarFoto(): void
@@ -163,7 +175,6 @@ class MiPerfilProfesor extends Page
             ->send();
     }
 
-    // Autocomplete materias
     public function updatedMateriaQuery(string $value): void
     {
         if (! $this->isEditing) {
@@ -222,7 +233,6 @@ class MiPerfilProfesor extends Page
         unset($this->materiasPrecios[$materiaId]);
     }
 
-    // Autocomplete temas
     public function updatedTemaQuery(string $value): void
     {
         if (! $this->isEditing) {
@@ -295,12 +305,14 @@ class MiPerfilProfesor extends Page
             'apellido' => ['required', 'string', 'max:255'],
             'foto' => ['nullable', 'image', 'max:2048'],
 
-            'ciudad' => ['nullable', 'string', 'max:120', Rule::in(array_keys($this->ciudadesOptions))],
+            'pais_id' => ['required', 'integer', Rule::exists('paises', 'pais_id')],
+            'provincia_id' => ['required', 'integer', Rule::exists('provincias', 'provincia_id')],
+            'ciudad_id' => ['required', 'integer', Rule::exists('ciudades', 'ciudad_id')],
+
             'bio' => ['nullable', 'string', 'max:4000'],
             'experiencia_anios' => ['nullable', 'integer', 'min:0', 'max:80'],
             'nivel' => ['nullable', 'in:junior,semi,senior'],
             'precio_por_hora_default' => ['nullable', 'numeric', 'min:0'],
-
             'titulo_profesional' => ['nullable', 'string', 'max:180'],
 
             'materiasIds' => ['array'],
@@ -310,8 +322,32 @@ class MiPerfilProfesor extends Page
             'temasIds' => ['array'],
             'temasIds.*' => ['integer'],
         ], [
-            'ciudad.in' => 'La ciudad seleccionada no es válida.',
+            'pais_id.required' => 'Seleccioná un país.',
+            'provincia_id.required' => 'Seleccioná una provincia.',
+            'ciudad_id.required' => 'Seleccioná una ciudad.',
         ]);
+
+        $provinciaValida = Provincia::query()
+            ->where('provincia_id', $this->provincia_id)
+            ->where('pais_id', $this->pais_id)
+            ->exists();
+
+        if (! $provinciaValida) {
+            throw ValidationException::withMessages([
+                'provincia_id' => 'La provincia no pertenece al país seleccionado.',
+            ]);
+        }
+
+        $ciudadValida = Ciudad::query()
+            ->where('ciudad_id', $this->ciudad_id)
+            ->where('provincia_id', $this->provincia_id)
+            ->exists();
+
+        if (! $ciudadValida) {
+            throw ValidationException::withMessages([
+                'ciudad_id' => 'La ciudad no pertenece a la provincia seleccionada.',
+            ]);
+        }
 
         $materiasIds = array_values(array_unique(array_map('intval', $this->materiasIds)));
         $temasIds = array_values(array_unique(array_map('intval', $this->temasIds)));
@@ -334,13 +370,17 @@ class MiPerfilProfesor extends Page
                 if ($user->profile_photo_path) {
                     Storage::disk('public')->delete($user->profile_photo_path);
                 }
+
                 $user->profile_photo_path = $this->foto->store('profile-photos', 'public');
             }
 
             $user->save();
 
-            $profile = $user->profesorProfile ?: ProfesorProfile::create(['user_id' => $user->id]);
-            $profile->ciudad = $this->ciudad;
+            $profile = $user->profesorProfile ?: ProfesorProfile::create([
+                'user_id' => $user->id,
+            ]);
+
+            $profile->ciudad_id = $this->ciudad_id;
             $profile->bio = $this->bio;
             $profile->experiencia_anios = $this->experiencia_anios;
             $profile->nivel = $this->nivel;
@@ -353,7 +393,10 @@ class MiPerfilProfesor extends Page
         });
 
         $user->refresh();
-        $this->profilePhotoUrl = $user->profile_photo_path ? Storage::url($user->profile_photo_path) : null;
+
+        $this->profilePhotoUrl = $user->profile_photo_path
+            ? Storage::url($user->profile_photo_path)
+            : null;
 
         $this->isEditing = false;
         $this->materiaQuery = '';
@@ -362,7 +405,10 @@ class MiPerfilProfesor extends Page
         $this->temaResultados = [];
         $this->foto = null;
 
-        Notification::make()->title('Perfil actualizado')->success()->send();
+        Notification::make()
+            ->title('Perfil actualizado')
+            ->success()
+            ->send();
     }
 
     public function getMateriasOptionsProperty(): array
@@ -391,39 +437,37 @@ class MiPerfilProfesor extends Page
             ->toArray();
     }
 
+    public function getPaisesOptionsProperty(): array
+    {
+        return Pais::query()
+            ->orderBy('pais_nombre')
+            ->pluck('pais_nombre', 'pais_id')
+            ->toArray();
+    }
+
+    public function getProvinciasOptionsProperty(): array
+    {
+        if (! $this->pais_id) {
+            return [];
+        }
+
+        return Provincia::query()
+            ->where('pais_id', $this->pais_id)
+            ->orderBy('provincia_nombre')
+            ->pluck('provincia_nombre', 'provincia_id')
+            ->toArray();
+    }
+
     public function getCiudadesOptionsProperty(): array
     {
-        return [
-            'Buenos Aires' => 'Buenos Aires',
-            'Córdoba' => 'Córdoba',
-            'Rosario' => 'Rosario',
-            'Mendoza' => 'Mendoza',
-            'La Plata' => 'La Plata',
-            'San Miguel de Tucumán' => 'San Miguel de Tucumán',
-            'Mar del Plata' => 'Mar del Plata',
-            'Salta' => 'Salta',
-            'Santa Fe' => 'Santa Fe',
-            'San Juan' => 'San Juan',
-            'Resistencia' => 'Resistencia',
-            'Neuquén' => 'Neuquén',
-            'Santiago del Estero' => 'Santiago del Estero',
-            'Corrientes' => 'Corrientes',
-            'Posadas' => 'Posadas',
-            'Bahía Blanca' => 'Bahía Blanca',
-            'Paraná' => 'Paraná',
-            'Formosa' => 'Formosa',
-            'San Salvador de Jujuy' => 'San Salvador de Jujuy',
-            'San Luis' => 'San Luis',
-            'La Rioja' => 'La Rioja',
-            'Catamarca' => 'Catamarca',
-            'Río Cuarto' => 'Río Cuarto',
-            'Comodoro Rivadavia' => 'Comodoro Rivadavia',
-            'Trelew' => 'Trelew',
-            'Río Gallegos' => 'Río Gallegos',
-            'Ushuaia' => 'Ushuaia',
-            'Rawson' => 'Rawson',
-            'Viedma' => 'Viedma',
-            'Santa Rosa' => 'Santa Rosa',
-        ];
+        if (! $this->provincia_id) {
+            return [];
+        }
+
+        return Ciudad::query()
+            ->where('provincia_id', $this->provincia_id)
+            ->orderBy('ciudad_nombre')
+            ->pluck('ciudad_nombre', 'ciudad_id')
+            ->toArray();
     }
 }

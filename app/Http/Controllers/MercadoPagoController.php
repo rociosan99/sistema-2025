@@ -152,6 +152,7 @@ class MercadoPagoController extends Controller
                 $audit->log('pago.mail_intento_bloqueado_pago_aprobado', $turno, [
                     'turno_id' => $turno->id,
                     'pago_id' => $pagoExistente->pago_id ?? null,
+                    'mp_payment_id' => $pagoExistente->mp_payment_id ?? null,
                 ]);
 
                 return view('turnos.confirmacion-resultado', [
@@ -207,16 +208,28 @@ class MercadoPagoController extends Controller
         return redirect('/alumno/turnos');
     }
 
-    public function failure(Turno $turno)
+    public function failure(Request $request, Turno $turno)
     {
+        $paymentId = (string) $request->query('payment_id', '');
+
+        if ($paymentId !== '') {
+            $this->procesarPagoDesdeMercadoPago($paymentId, $turno);
+        }
+
         return view('turnos.confirmacion-resultado', [
             'titulo'  => 'Pago fallido o cancelado',
             'mensaje' => 'El pago fue cancelado o rechazado. Podés intentar de nuevo desde tu panel.',
         ]);
     }
 
-    public function pending(Turno $turno)
+    public function pending(Request $request, Turno $turno)
     {
+        $paymentId = (string) $request->query('payment_id', '');
+
+        if ($paymentId !== '') {
+            $this->procesarPagoDesdeMercadoPago($paymentId, $turno);
+        }
+
         return view('turnos.confirmacion-resultado', [
             'titulo'  => 'Pago pendiente',
             'mensaje' => 'El pago quedó pendiente. Cuando se apruebe, se actualizará automáticamente.',
@@ -378,16 +391,12 @@ class MercadoPagoController extends Controller
             return [
                 'titulo'  => 'Pago inválido',
                 'mensaje' => 'El pago no corresponde a este turno.',
+                'status'  => 'invalid',
             ];
         }
 
-        $pagoExistente = Pago::query()
-            ->where('turno_id', $turno->id)
-            ->lockForUpdate()
-            ->first();
+        $pagoExistente = $turno->pago;
 
-        // Idempotencia fuerte:
-        // si ya hay un pago aprobado para este turno, no lo volvemos a pisar.
         if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
             if (
                 ! empty($pagoExistente->mp_payment_id) &&
@@ -508,83 +517,71 @@ class MercadoPagoController extends Controller
             ];
         }
 
-        // No degradar estados finales por webhooks tardíos
         if (in_array($turno->estado, [
             Turno::ESTADO_CANCELADO,
             Turno::ESTADO_VENCIDO,
             Turno::ESTADO_CONFIRMADO,
         ], true)) {
             return [
-                'titulo' => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
+                'titulo'  => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
                 'mensaje' => $status === 'rejected'
-                    ? 'El pago fue rechazado. El turno ya tenía un estado final y no fue modificado.'
-                    : 'El pago quedó pendiente. El turno ya tenía un estado final y no fue modificado.',
-                'status' => $status,
+                    ? 'El pago fue rechazado, pero el turno ya tiene un estado final y no se modificó.'
+                    : 'El pago quedó pendiente, pero el turno ya tiene un estado final y no se modificó.',
+                'status'  => $status ?: 'pending',
             ];
         }
 
-        if (in_array($turno->estado, [
-            Turno::ESTADO_PENDIENTE,
-            Turno::ESTADO_ACEPTADO,
-        ], true)) {
-            $turno->update(['estado' => Turno::ESTADO_PENDIENTE_PAGO]);
-        }
-
-        if ($audit && $status === 'rejected') {
-            $audit->log('pago.rechazado', $turno, [
-                'turno_id' => $turno->id,
-                'mp_payment_id' => $paymentId,
-                'status_detail' => $statusDetail,
-            ]);
-        }
-
         return [
-            'titulo' => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
+            'titulo'  => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
             'mensaje' => $status === 'rejected'
-                ? 'El pago fue rechazado. Podés intentar nuevamente.'
-                : 'El pago quedó pendiente. Cuando se apruebe, se actualizará automáticamente.',
-            'status' => $status,
+                ? 'Mercado Pago rechazó el pago. Podés intentar nuevamente desde tu panel.'
+                : 'El pago quedó pendiente. Cuando se acredite, lo actualizaremos.',
+            'status'  => $status ?: 'pending',
         ];
     }
 
     private function debeIgnorarWebhook(Request $request): bool
     {
-        $type = (string) ($request->input('type') ?? $request->input('topic') ?? '');
-        $action = (string) ($request->input('action') ?? '');
-        $resource = (string) ($request->input('resource') ?? '');
+        $type = (string) ($request->query('type')
+            ?? $request->query('topic')
+            ?? data_get($request->all(), 'type')
+            ?? data_get($request->all(), 'topic')
+            ?? '');
 
-        if ($type !== '' && $type !== 'payment') {
-            return true;
+        $action = (string) data_get($request->all(), 'action', '');
+
+        if ($type === 'payment') {
+            return false;
         }
 
-        if ($action !== '' && str_contains($action, 'merchant_order')) {
-            return true;
+        if (str_contains($action, 'payment')) {
+            return false;
         }
 
-        if ($resource !== '' && str_contains($resource, '/merchant_orders/')) {
-            return true;
-        }
-
-        if ($type === '' && $resource !== '' && ! str_contains($resource, '/payments/')) {
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     private function extraerPaymentIdDesdeWebhook(Request $request): ?string
     {
-        $paymentId =
-            $request->input('data.id') ??
-            ($request->input('data')['id'] ?? null) ??
-            $request->input('id');
+        $candidatos = [
+            $request->query('data_id'),
+            $request->query('id'),
+            data_get($request->all(), 'data.id'),
+            data_get($request->all(), 'resource.id'),
+            data_get($request->all(), 'id'),
+        ];
 
-        if (! $paymentId && $request->filled('resource')) {
-            if (preg_match('~/payments/(\d+)~', (string) $request->input('resource'), $m)) {
-                $paymentId = $m[1];
+        foreach ($candidatos as $valor) {
+            if ($valor !== null && $valor !== '') {
+                return (string) $valor;
             }
         }
 
-        return $paymentId ? (string) $paymentId : null;
+        $resource = (string) data_get($request->all(), 'resource', '');
+        if ($resource !== '' && preg_match('~/v1/payments/(\d+)~', $resource, $m)) {
+            return (string) $m[1];
+        }
+
+        return null;
     }
 }

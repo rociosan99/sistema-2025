@@ -10,7 +10,7 @@ class ProfesorProfile extends Model
 
     protected $fillable = [
         'user_id',
-        'ciudad',
+        'ciudad_id',
         'bio',
         'experiencia_anios',
         'nivel',
@@ -21,5 +21,10 @@ class ProfesorProfile extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function ciudadItem()
+    {
+        return $this->belongsTo(Ciudad::class, 'ciudad_id', 'ciudad_id');
     }
 }

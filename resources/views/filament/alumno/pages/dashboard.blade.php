@@ -1,12 +1,56 @@
 <x-filament-panels::page>
 
+    @php
+        $ahora = now();
+        $hoy = $ahora->toDateString();
+        $horaActual = $ahora->format('H:i:s');
+
+        $proximoTurno = \App\Models\Turno::query()
+            ->with([
+                'profesor:id,name,apellido',
+                'materia:materia_id,materia_nombre',
+                'tema:tema_id,tema_nombre',
+            ])
+            ->where('alumno_id', auth()->id())
+            ->where('estado', \App\Models\Turno::ESTADO_CONFIRMADO)
+            ->where(function ($query) use ($hoy, $horaActual) {
+                $query->whereDate('fecha', '>', $hoy)
+                    ->orWhere(function ($subQuery) use ($hoy, $horaActual) {
+                        $subQuery->whereDate('fecha', $hoy)
+                            ->where('hora_fin', '>=', $horaActual);
+                    });
+            })
+            ->orderBy('fecha')
+            ->orderBy('hora_inicio')
+            ->first();
+
+        $proximaClase = null;
+
+        if ($proximoTurno) {
+            $proximaClase = [
+                'id' => $proximoTurno->id,
+                'fecha' => $proximoTurno->fecha
+                    ? \Carbon\Carbon::parse($proximoTurno->fecha)->format('d/m/Y')
+                    : '-',
+                'hora_inicio' => $proximoTurno->hora_inicio
+                    ? substr((string) $proximoTurno->hora_inicio, 0, 5)
+                    : '-',
+                'hora_fin' => $proximoTurno->hora_fin
+                    ? substr((string) $proximoTurno->hora_fin, 0, 5)
+                    : '-',
+                'profesor' => trim(($proximoTurno->profesor?->name ?? '') . ' ' . ($proximoTurno->profesor?->apellido ?? '')) ?: '-',
+                'materia' => $proximoTurno->materia?->materia_nombre ?? '-',
+                'tema' => $proximoTurno->tema?->tema_nombre ?? 'Sin tema',
+                'enlace_clase' => trim((string) ($proximoTurno->enlace_clase ?? '')),
+            ];
+        }
+    @endphp
+
     <style>
-        /* ====== Layout general ====== */
         .al-dashboard-wrap{
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         }
 
-        /* ====== Header tipo app ====== */
         .al-header{
             display:flex;
             align-items:center;
@@ -63,7 +107,6 @@
             white-space:nowrap;
         }
 
-        /* ====== Grid de tarjetas ====== */
         .al-grid{
             display:grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -78,7 +121,6 @@
             .al-header{ flex-direction:column; align-items:flex-start; }
         }
 
-        /* ====== Card ====== */
         .al-card{
             position:relative;
             border-radius:18px;
@@ -102,7 +144,6 @@
             padding:14px 14px 12px 14px;
         }
 
-        /* ====== Top bar de la card ====== */
         .al-card-top{
             display:flex;
             justify-content:space-between;
@@ -157,7 +198,6 @@
             box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .22);
         }
 
-        /* ====== Info rows ====== */
         .al-info{
             display:flex;
             flex-direction:column;
@@ -191,7 +231,6 @@
             text-align:right;
         }
 
-        /* ====== Acciones ====== */
         .al-actions{
             display:flex;
             justify-content:flex-end;
@@ -250,7 +289,6 @@
             justify-content:center;
         }
 
-        /* ====== Empty state ====== */
         .al-empty{
             border-radius:18px;
             background: linear-gradient(135deg, rgba(79, 70, 229, .10) 0%, rgba(6, 182, 212, .08) 50%, rgba(34, 197, 94, .10) 100%);
@@ -272,7 +310,6 @@
             color: rgba(15, 23, 42, .72);
         }
 
-        /* ====== Sección (caja grande) ====== */
         .al-section{
             border:1px solid rgba(15,23,42,.10);
             border-radius:18px;
@@ -322,7 +359,6 @@
 
     <div class="al-dashboard-wrap">
 
-        {{-- Header --}}
         <div class="al-header">
             <div class="al-header-left">
                 <div class="al-avatar" aria-hidden="true">
@@ -348,10 +384,83 @@
             </div>
         </div>
 
-        {{-- =========================
-           INVITACIONES DE REEMPLAZO
-           (requiere $this->invitacionesReemplazo)
-        ========================= --}}
+        @if($proximaClase)
+            <div class="al-section">
+                <div class="al-section-head" style="background: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #7c3aed 100%);">
+                    <div>
+                        <div class="al-section-title">Tu próxima clase es</div>
+                        <div class="al-section-sub">
+                            Esta es la siguiente clase pagada que tenés programada.
+                        </div>
+                    </div>
+
+                    <div class="al-section-pill">
+                        ✅ Confirmada
+                    </div>
+                </div>
+
+                <div class="al-section-body">
+                    <div class="al-card">
+                        <div class="al-card-inner">
+
+                            <div class="al-card-top">
+                                <div>
+                                    <p class="al-time">{{ $proximaClase['hora_inicio'] }} - {{ $proximaClase['hora_fin'] }}</p>
+
+                                    <div class="al-badges">
+                                        <span class="al-badge al-badge-date">📅 {{ $proximaClase['fecha'] }}</span>
+                                        <span class="al-badge al-badge-paid">✅ Pagada</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="al-info">
+                                <div class="al-row">
+                                    <div>
+                                        <p class="al-label">Profesor</p>
+                                        <p class="al-value" style="text-align:left;">{{ $proximaClase['profesor'] }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="al-row">
+                                    <div>
+                                        <p class="al-label">Materia</p>
+                                        <p class="al-value" style="text-align:left;">{{ $proximaClase['materia'] }}</p>
+                                    </div>
+                                </div>
+
+                                <div class="al-row">
+                                    <div>
+                                        <p class="al-label">Tema</p>
+                                        <p class="al-value" style="text-align:left;">{{ $proximaClase['tema'] }}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="al-actions">
+                                @if($proximaClase['enlace_clase'] !== '')
+                                    <a
+                                        class="al-btn al-btn-accept"
+                                        href="{{ $proximaClase['enlace_clase'] }}"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style="text-decoration:none;"
+                                    >
+                                        🔗 Enlace de clase
+                                    </a>
+                                @else
+                                    <span class="al-badge al-badge-warn">
+                                        🔒 El profesor todavía no cargó el enlace
+                                    </span>
+                                @endif
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         @if (!empty($this->invitacionesReemplazo) && count($this->invitacionesReemplazo))
             <div class="al-section">
                 <div class="al-section-head" style="background: linear-gradient(135deg, #111827 0%, #1d4ed8 55%, #0ea5e9 100%);">
@@ -433,9 +542,6 @@
             </div>
         @endif
 
-        {{-- =========================
-           CALIFICACIONES PENDIENTES
-        ========================= --}}
         @if (!empty($this->pendientes) && count($this->pendientes))
             <div class="al-grid">
                 @foreach ($this->pendientes as $p)
@@ -500,7 +606,6 @@
             </div>
         @endif
 
-        {{-- Modal de Filament Actions --}}
         <x-filament-actions::modals />
 
     </div>
