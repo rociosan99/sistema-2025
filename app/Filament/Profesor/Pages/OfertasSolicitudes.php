@@ -2,12 +2,14 @@
 
 namespace App\Filament\Profesor\Pages;
 
+use App\Models\Disponibilidad;
 use App\Models\Materia;
 use App\Models\OfertaSolicitud;
 use App\Models\SolicitudDisponibilidad;
 use App\Models\Turno;
 use App\Models\User;
 use BackedEnum;
+use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
@@ -16,8 +18,8 @@ use Illuminate\Support\Facades\DB;
 class OfertasSolicitudes extends Page
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-inbox';
-    protected static ?string $navigationLabel = 'Ofertas de alumnos';
-    protected static ?string $title = 'Ofertas de solicitudes';
+    protected static ?string $navigationLabel = 'Oferta de alumnos';
+    protected static ?string $title = 'Oferta de alumnos';
     protected static ?string $slug = 'ofertas-solicitudes';
 
     protected string $view = 'filament.profesor.pages.ofertas-solicitudes';
@@ -25,14 +27,12 @@ class OfertasSolicitudes extends Page
     /** @var array<int, array> */
     public array $ofertas = [];
 
-    // ✅ filtros (no rompen nada si están vacíos)
     public ?int $fAlumnoId = null;
     public ?int $fMateriaId = null;
-    public ?string $fFechaDesde = null; // YYYY-mm-dd
-    public ?string $fFechaHasta = null; // YYYY-mm-dd
+    public ?string $fFechaDesde = null;
+    public ?string $fFechaHasta = null;
     public bool $fSoloRecomendadas = false;
 
-    // ✅ options para selects
     public array $alumnosOptions = [];
     public array $materiasOptions = [];
 
@@ -46,12 +46,12 @@ class OfertasSolicitudes extends Page
     {
         $profesorId = (int) Auth::id();
 
-        // Alumnos que aparecen en ofertas (para este profe)
         $alumnos = User::query()
             ->whereIn('id', function ($q) use ($profesorId) {
                 $q->from('ofertas_solicitud')
                     ->join('solicitudes_disponibilidad', 'solicitudes_disponibilidad.id', '=', 'ofertas_solicitud.solicitud_id')
                     ->where('ofertas_solicitud.profesor_id', $profesorId)
+                    ->where('ofertas_solicitud.estado', OfertaSolicitud::ESTADO_PENDIENTE)
                     ->select('solicitudes_disponibilidad.alumno_id')
                     ->distinct();
             })
@@ -63,10 +63,10 @@ class OfertasSolicitudes extends Page
             return [$u->id => ($nombre !== '' ? $nombre : ($u->name ?? 'Alumno'))];
         })->toArray();
 
-        // Materias que aparecen en ofertas (para este profe)
         $materiaIds = DB::table('ofertas_solicitud')
             ->join('solicitudes_disponibilidad', 'solicitudes_disponibilidad.id', '=', 'ofertas_solicitud.solicitud_id')
             ->where('ofertas_solicitud.profesor_id', $profesorId)
+            ->where('ofertas_solicitud.estado', OfertaSolicitud::ESTADO_PENDIENTE)
             ->select('solicitudes_disponibilidad.materia_id')
             ->distinct()
             ->pluck('materia_id')
@@ -96,7 +96,6 @@ class OfertasSolicitudes extends Page
     {
         $profesorId = (int) Auth::id();
 
-        // ✅ Base EXACTA como lo tenías (no cambio lógica)
         $query = OfertaSolicitud::query()
             ->where('profesor_id', $profesorId)
             ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
@@ -110,7 +109,6 @@ class OfertasSolicitudes extends Page
             ->orderByDesc('recommended_turno_id')
             ->orderBy('expires_at');
 
-        // ✅ Filtros (opcionales)
         if ($this->fSoloRecomendadas) {
             $query->whereNotNull('recommended_turno_id');
         }
@@ -140,63 +138,73 @@ class OfertasSolicitudes extends Page
         }
 
         $rows = $query->get();
-
         $visibles = [];
 
-        foreach ($rows as $o) {
-            $s = $o->solicitud;
+        foreach ($rows as $oferta) {
+            $solicitud = $oferta->solicitud;
 
-            // ✅ tu limpieza tal cual
-            if (! $s || $s->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
-                $o->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+            if (! $solicitud || $solicitud->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
+                $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                 continue;
             }
 
-            $slotInicio = (string) ($o->hora_inicio ?? $s->hora_inicio);
-            $slotFin    = (string) ($o->hora_fin ?? $s->hora_fin);
-
-            $hayChoque = Turno::query()
-                ->where('profesor_id', $profesorId)
-                ->whereDate('fecha', $s->fecha->toDateString())
-                ->whereIn('estado', [
-                    Turno::ESTADO_PENDIENTE,
-                    Turno::ESTADO_ACEPTADO,
-                    Turno::ESTADO_PENDIENTE_PAGO,
-                    Turno::ESTADO_CONFIRMADO,
-                ])
-                ->where(function ($q) use ($slotInicio, $slotFin) {
-                    $q->where('hora_inicio', '<', $slotFin)
-                      ->where('hora_fin', '>', $slotInicio);
-                })
-                ->exists();
-
-            if ($hayChoque) {
-                $o->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+            if ($solicitud->expires_at && $solicitud->expires_at->lte(now())) {
+                $solicitud->update(['estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA]);
+                $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                 continue;
             }
 
-            $recomendada = ! empty($o->recommended_turno_id);
-            $texto = $recomendada ? 'Se liberó este horario por una cancelación' : '—';
+            $fecha = $solicitud->fecha->toDateString();
+            $slotInicio = $this->normalizarHora((string) ($oferta->hora_inicio ?? $solicitud->hora_inicio));
+            $slotFin = $this->normalizarHora((string) ($oferta->hora_fin ?? $solicitud->hora_fin));
 
-            $alumnoNombre = trim(($s->alumno?->name ?? '') . ' ' . ($s->alumno?->apellido ?? ''));
+            // No mostrar horarios que ya empezaron o pasaron.
+            if ($this->slotYaNoEsAceptable($fecha, $slotInicio)) {
+                $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                continue;
+            }
+
+            // Si el profesor cambió disponibilidad y ya no cubre el slot, expirar.
+            if (! $this->profesorCubreSlot($profesorId, $fecha, $slotInicio, $slotFin)) {
+                $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                continue;
+            }
+
+            if ($this->hayChoqueProfesor($profesorId, $fecha, $slotInicio, $slotFin)) {
+                $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                continue;
+            }
+
+            if ($this->hayChoqueAlumno((int) $solicitud->alumno_id, $fecha, $slotInicio, $slotFin)) {
+                $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                continue;
+            }
+
+            $recomendada = ! empty($oferta->recommended_turno_id);
+            $texto = $recomendada
+                ? 'Se liberó este horario por una cancelación'
+                : 'Match generado por disponibilidad e interés del alumno';
+
+            $alumnoNombre = trim(($solicitud->alumno?->name ?? '') . ' ' . ($solicitud->alumno?->apellido ?? ''));
+
             if ($alumnoNombre === '') {
-                $alumnoNombre = $s->alumno?->name ?? '-';
+                $alumnoNombre = $solicitud->alumno?->name ?? '-';
             }
 
             $visibles[] = [
-                'id' => $o->id,
-                'expires_at' => $o->expires_at?->format('d/m/Y H:i') ?? '-',
-                'solicitud_id' => $s->id,
+                'id' => $oferta->id,
+                'expires_at' => $oferta->expires_at?->format('d/m/Y H:i') ?? '-',
+                'solicitud_id' => $solicitud->id,
 
                 'recomendada' => $recomendada,
                 'recomendacion_texto' => $texto,
 
                 'alumno' => $alumnoNombre,
-                'materia' => $s->materia?->materia_nombre ?? '-',
-                'tema' => $s->tema?->tema_nombre ?? 'Sin tema',
-                'fecha' => $s->fecha->format('d/m/Y'),
-                'hora_inicio' => substr((string) $slotInicio, 0, 5),
-                'hora_fin' => substr((string) $slotFin, 0, 5),
+                'materia' => $solicitud->materia?->materia_nombre ?? '-',
+                'tema' => $solicitud->tema?->tema_nombre ?? 'Sin tema',
+                'fecha' => $solicitud->fecha->format('d/m/Y'),
+                'hora_inicio' => substr($slotInicio, 0, 5),
+                'hora_fin' => substr($slotFin, 0, 5),
             ];
         }
 
@@ -204,6 +212,7 @@ class OfertasSolicitudes extends Page
             if (($a['recomendada'] ?? false) !== ($b['recomendada'] ?? false)) {
                 return ($b['recomendada'] ?? false) <=> ($a['recomendada'] ?? false);
             }
+
             return strcmp((string) $a['expires_at'], (string) $b['expires_at']);
         });
 
@@ -219,14 +228,24 @@ class OfertasSolicitudes extends Page
             ->findOrFail($ofertaId);
 
         if ($oferta->estado !== OfertaSolicitud::ESTADO_PENDIENTE) {
-            Notification::make()->title('Oferta ya procesada')->warning()->send();
+            Notification::make()
+                ->title('Oferta ya procesada')
+                ->warning()
+                ->send();
+
             $this->cargar();
             return;
         }
 
-        $oferta->update(['estado' => OfertaSolicitud::ESTADO_RECHAZADA]);
+        $oferta->update([
+            'estado' => OfertaSolicitud::ESTADO_RECHAZADA,
+        ]);
 
-        Notification::make()->title('Oferta rechazada')->success()->send();
+        Notification::make()
+            ->title('Oferta rechazada')
+            ->success()
+            ->send();
+
         $this->cargar();
     }
 
@@ -236,7 +255,6 @@ class OfertasSolicitudes extends Page
 
         try {
             DB::transaction(function () use ($ofertaId, $profesorId) {
-
                 $oferta = OfertaSolicitud::query()
                     ->where('profesor_id', $profesorId)
                     ->lockForUpdate()
@@ -244,93 +262,100 @@ class OfertasSolicitudes extends Page
                     ->findOrFail($ofertaId);
 
                 if ($oferta->estado !== OfertaSolicitud::ESTADO_PENDIENTE) {
-                    throw new \RuntimeException('Oferta ya procesada.');
+                    throw new \RuntimeException('La oferta ya fue procesada.');
                 }
 
                 if ($oferta->expires_at->lte(now())) {
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
-                    throw new \RuntimeException('Oferta vencida.');
+                    throw new \RuntimeException('La oferta venció.');
                 }
 
-                $s = SolicitudDisponibilidad::query()
+                $solicitud = SolicitudDisponibilidad::query()
                     ->lockForUpdate()
                     ->findOrFail($oferta->solicitud_id);
 
-                if ($s->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
+                if ($solicitud->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                     throw new \RuntimeException('La solicitud ya no está activa.');
                 }
 
-                if ($s->expires_at && $s->expires_at->lte(now())) {
-                    $s->update(['estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA]);
+                if ($solicitud->expires_at && $solicitud->expires_at->lte(now())) {
+                    $solicitud->update(['estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA]);
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                     throw new \RuntimeException('La solicitud expiró.');
                 }
 
-                $slotInicio = (string) ($oferta->hora_inicio ?? $s->hora_inicio);
-                $slotFin    = (string) ($oferta->hora_fin ?? $s->hora_fin);
+                $fecha = $solicitud->fecha->toDateString();
+                $slotInicio = $this->normalizarHora((string) ($oferta->hora_inicio ?? $solicitud->hora_inicio));
+                $slotFin = $this->normalizarHora((string) ($oferta->hora_fin ?? $solicitud->hora_fin));
 
-                $hayChoque = Turno::query()
-                    ->where('profesor_id', $profesorId)
-                    ->whereDate('fecha', $s->fecha->toDateString())
-                    ->whereIn('estado', [
-                        Turno::ESTADO_PENDIENTE,
-                        Turno::ESTADO_ACEPTADO,
-                        Turno::ESTADO_PENDIENTE_PAGO,
-                        Turno::ESTADO_CONFIRMADO,
-                    ])
-                    ->where(function ($q) use ($slotInicio, $slotFin) {
-                        $q->where('hora_inicio', '<', $slotFin)
-                          ->where('hora_fin', '>', $slotInicio);
-                    })
-                    ->lockForUpdate()
-                    ->exists();
-
-                if ($hayChoque) {
+                if ($this->slotYaNoEsAceptable($fecha, $slotInicio)) {
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
-                    throw new \RuntimeException('Ya no estás disponible en ese horario.');
+                    throw new \RuntimeException('El horario de esta oferta ya pasó.');
+                }
+
+                if (! $this->profesorCubreSlot($profesorId, $fecha, $slotInicio, $slotFin)) {
+                    $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                    throw new \RuntimeException('Ya no tenés disponibilidad para ese horario.');
+                }
+
+                if ($this->hayChoqueProfesor($profesorId, $fecha, $slotInicio, $slotFin)) {
+                    $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                    throw new \RuntimeException('Ya tenés un turno en ese horario.');
+                }
+
+                if ($this->hayChoqueAlumno((int) $solicitud->alumno_id, $fecha, $slotInicio, $slotFin)) {
+                    $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                    throw new \RuntimeException('El alumno ya tiene un turno en ese horario.');
                 }
 
                 Turno::create([
-                    'alumno_id'   => $s->alumno_id,
+                    'alumno_id' => $solicitud->alumno_id,
                     'profesor_id' => $profesorId,
-                    'materia_id'  => $s->materia_id,
-                    'tema_id'     => $s->tema_id,
-                    'fecha'       => $s->fecha->toDateString(),
+                    'materia_id' => $solicitud->materia_id,
+                    'tema_id' => $solicitud->tema_id,
+                    'fecha' => $fecha,
                     'hora_inicio' => $slotInicio,
-                    'hora_fin'    => $slotFin,
-                    'estado'      => Turno::ESTADO_PENDIENTE_PAGO,
+                    'hora_fin' => $slotFin,
+                    'estado' => Turno::ESTADO_PENDIENTE_PAGO,
                 ]);
 
-                $oferta->update(['estado' => OfertaSolicitud::ESTADO_ACEPTADA]);
+                $oferta->update([
+                    'estado' => OfertaSolicitud::ESTADO_ACEPTADA,
+                ]);
+
+                $solicitud->update([
+                    'estado' => SolicitudDisponibilidad::ESTADO_TOMADA,
+                ]);
 
                 OfertaSolicitud::query()
-                    ->where('solicitud_id', $s->id)
-                    ->where('hora_inicio', $slotInicio)
-                    ->where('hora_fin', $slotFin)
+                    ->where('solicitud_id', $solicitud->id)
                     ->where('id', '!=', $oferta->id)
                     ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
-                    ->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                    ->update([
+                        'estado' => OfertaSolicitud::ESTADO_EXPIRADA,
+                    ]);
 
                 OfertaSolicitud::query()
                     ->where('profesor_id', $profesorId)
                     ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
-                    ->whereHas('solicitud', function ($q) use ($s) {
-                        $q->whereDate('fecha', $s->fecha->toDateString());
+                    ->whereHas('solicitud', function ($q) use ($fecha) {
+                        $q->whereDate('fecha', $fecha);
                     })
                     ->where(function ($q) use ($slotInicio, $slotFin) {
                         $q->where('hora_inicio', '<', $slotFin)
-                          ->where('hora_fin', '>', $slotInicio);
+                            ->where('hora_fin', '>', $slotInicio);
                     })
-                    ->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                    ->update([
+                        'estado' => OfertaSolicitud::ESTADO_EXPIRADA,
+                    ]);
             });
 
             Notification::make()
                 ->title('Oferta aceptada')
-                ->body('Se creó el turno por ese horario y el alumno podrá pagar.')
+                ->body('Se creó el turno y el alumno podrá pagarlo.')
                 ->success()
                 ->send();
-
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('No se pudo aceptar')
@@ -340,5 +365,73 @@ class OfertasSolicitudes extends Page
         }
 
         $this->cargar();
+    }
+
+    private function profesorCubreSlot(int $profesorId, string $fecha, string $horaInicio, string $horaFin): bool
+    {
+        $diaSemana = Carbon::parse($fecha)->dayOfWeekIso;
+
+        return Disponibilidad::query()
+            ->where('profesor_id', $profesorId)
+            ->where('dia_semana', $diaSemana)
+            ->where('hora_inicio', '<=', $horaInicio)
+            ->where('hora_fin', '>=', $horaFin)
+            ->exists();
+    }
+
+    private function slotYaNoEsAceptable(string $fecha, string $horaInicio): bool
+    {
+        return Carbon::parse($fecha . ' ' . $this->normalizarHora($horaInicio))->lte(now());
+    }
+
+    private function hayChoqueProfesor(int $profesorId, string $fecha, string $horaInicio, string $horaFin): bool
+    {
+        return Turno::query()
+            ->where('profesor_id', $profesorId)
+            ->whereDate('fecha', $fecha)
+            ->whereIn('estado', [
+                Turno::ESTADO_PENDIENTE,
+                Turno::ESTADO_ACEPTADO,
+                Turno::ESTADO_PENDIENTE_PAGO,
+                Turno::ESTADO_CONFIRMADO,
+            ])
+            ->where(function ($q) use ($horaInicio, $horaFin) {
+                $q->where('hora_inicio', '<', $horaFin)
+                    ->where('hora_fin', '>', $horaInicio);
+            })
+            ->exists();
+    }
+
+    private function hayChoqueAlumno(int $alumnoId, string $fecha, string $horaInicio, string $horaFin): bool
+    {
+        return Turno::query()
+            ->where('alumno_id', $alumnoId)
+            ->whereDate('fecha', $fecha)
+            ->whereIn('estado', [
+                Turno::ESTADO_PENDIENTE,
+                Turno::ESTADO_ACEPTADO,
+                Turno::ESTADO_PENDIENTE_PAGO,
+                Turno::ESTADO_CONFIRMADO,
+            ])
+            ->where(function ($q) use ($horaInicio, $horaFin) {
+                $q->where('hora_inicio', '<', $horaFin)
+                    ->where('hora_fin', '>', $horaInicio);
+            })
+            ->exists();
+    }
+
+    private function normalizarHora(string $hora): string
+    {
+        $hora = trim($hora);
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2})$/', $hora, $m)) {
+            return $m[1];
+        }
+
+        if (preg_match('/^\d{2}:\d{2}$/', $hora)) {
+            return $hora . ':00';
+        }
+
+        return $hora;
     }
 }

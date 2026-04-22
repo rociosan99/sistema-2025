@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\OfertaSolicitud;
+use App\Models\SolicitudDisponibilidad;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,6 +19,16 @@ class ExpirarOfertasSolicitudJob implements ShouldQueue
         OfertaSolicitud::query()
             ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
             ->where('expires_at', '<=', now())
-            ->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+            ->update([
+                'estado' => OfertaSolicitud::ESTADO_EXPIRADA,
+            ]);
+
+        SolicitudDisponibilidad::query()
+            ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->update([
+                'estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA,
+            ]);
     }
 }

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Schedule;
 
 use App\Jobs\EnviarRecordatorioPago24hJob;
 use App\Jobs\MarcarTurnosVencidosJob;
-use App\Jobs\ProcesarSolicitudesDisponibilidadJob;
+use App\Jobs\GenerarOfertasInteligentesDesdeSolicitudesJob;
 use App\Jobs\ExpirarOfertasSolicitudJob;
 
 Artisan::command('inspire', function () {
@@ -25,13 +25,16 @@ Schedule::job(new EnviarRecordatorioPago24hJob())
     ->everyMinute();
 
 /**
- * Matching solicitudes -> genera ofertas
+ * Módulo inteligente
+ * - Lee solicitudes de disponibilidad activas
+ * - Busca profesores compatibles
+ * - Genera ofertas para profesores
  */
-Schedule::job(new ProcesarSolicitudesDisponibilidadJob())
-    ->everyMinute();
+Schedule::job(new GenerarOfertasInteligentesDesdeSolicitudesJob())
+    ->dailyAt('08:00');
 
 /**
- * Expira ofertas pendientes vencidas
+ * Limpieza de ofertas vencidas
  */
 Schedule::job(new ExpirarOfertasSolicitudJob())
-    ->everyMinute();
+    ->hourly();
