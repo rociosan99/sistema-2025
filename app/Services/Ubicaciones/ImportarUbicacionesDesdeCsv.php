@@ -47,7 +47,10 @@ class ImportarUbicacionesDesdeCsv
                 );
 
                 if ($headers === null) {
-                    $headers = $row;
+                    $headers = array_map(
+                        fn ($header) => is_string($header) ? $this->normalizarHeader($header) : $header,
+                        $row
+                    );
                     $this->validarHeaders($headers);
                     continue;
                 }
@@ -273,6 +276,11 @@ class ImportarUbicacionesDesdeCsv
         $value = trim($this->removeBom($value));
 
         return $value === '' ? null : $value;
+    }
+
+    private function normalizarHeader(string $value): string
+    {
+        return trim($this->removeBom($value), " \t\n\r\0\x0B\"");
     }
 
     private function removeBom(string $value): string
