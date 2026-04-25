@@ -11,6 +11,7 @@ class Pais extends Model
 
     protected $fillable = [
         'pais_nombre',
+        'codigo_externo',
     ];
 
     public function provincias()

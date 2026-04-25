@@ -12,6 +12,7 @@ class Ciudad extends Model
     protected $fillable = [
         'provincia_id',
         'ciudad_nombre',
+        'codigo_externo',
     ];
 
     public function provincia()
