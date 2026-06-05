@@ -2,11 +2,13 @@
 
 namespace App\Filament\Profesor\Pages;
 
+use App\Mail\SolicitudUbicacionCreada;
 use App\Models\Ciudad;
 use App\Models\Materia;
 use App\Models\Pais;
 use App\Models\ProfesorProfile;
 use App\Models\Provincia;
+use App\Models\SolicitudUbicacion;
 use App\Models\Tema;
 use App\Models\User;
 use BackedEnum;
@@ -14,6 +16,8 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -40,6 +44,11 @@ class MiPerfilProfesor extends Page
     public ?int $pais_id = null;
     public ?int $provincia_id = null;
     public ?int $ciudad_id = null;
+
+    public bool $modalSolicitudUbicacionAbierto = false;
+    public ?string $tipoSolicitudUbicacion = null;
+    public string $nombreUbicacionSolicitada = '';
+    public ?string $observacionSolicitudUbicacion = null;
 
     public ?string $bio = null;
     public ?int $experiencia_anios = null;
@@ -143,6 +152,215 @@ class MiPerfilProfesor extends Page
     public function updatedProvinciaId(): void
     {
         $this->ciudad_id = null;
+    }
+
+    public function abrirSolicitudPais(): void
+    {
+        $this->abrirSolicitudUbicacion(SolicitudUbicacion::TIPO_PAIS);
+    }
+
+    public function abrirSolicitudProvincia(): void
+    {
+        if (! $this->pais_id) {
+            Notification::make()
+                ->title('Selecciona un pais primero')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->abrirSolicitudUbicacion(SolicitudUbicacion::TIPO_PROVINCIA);
+    }
+
+    public function abrirSolicitudCiudad(): void
+    {
+        if (! $this->pais_id || ! $this->provincia_id) {
+            Notification::make()
+                ->title('Selecciona un pais y una provincia primero')
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->abrirSolicitudUbicacion(SolicitudUbicacion::TIPO_CIUDAD);
+    }
+
+    private function abrirSolicitudUbicacion(string $tipo): void
+    {
+        if (! $this->isEditing) {
+            return;
+        }
+
+        $this->resetValidation([
+            'nombreUbicacionSolicitada',
+            'observacionSolicitudUbicacion',
+            'tipoSolicitudUbicacion',
+        ]);
+
+        $this->tipoSolicitudUbicacion = $tipo;
+        $this->nombreUbicacionSolicitada = '';
+        $this->observacionSolicitudUbicacion = null;
+        $this->modalSolicitudUbicacionAbierto = true;
+    }
+
+    public function cerrarSolicitudUbicacion(): void
+    {
+        $this->modalSolicitudUbicacionAbierto = false;
+        $this->tipoSolicitudUbicacion = null;
+        $this->nombreUbicacionSolicitada = '';
+        $this->observacionSolicitudUbicacion = null;
+
+        $this->resetValidation([
+            'nombreUbicacionSolicitada',
+            'observacionSolicitudUbicacion',
+            'tipoSolicitudUbicacion',
+        ]);
+    }
+
+    public function enviarSolicitudUbicacion(): void
+    {
+        if (! $this->isEditing) {
+            return;
+        }
+
+        /** @var User|null $user */
+        $user = Auth::user();
+
+        if (! $user) {
+            throw ValidationException::withMessages([
+                'solicitud_ubicacion' => 'No se pudo cargar el usuario.',
+            ]);
+        }
+
+        $maxNombre = $this->tipoSolicitudUbicacion === SolicitudUbicacion::TIPO_CIUDAD ? 150 : 120;
+
+        $this->validate([
+            'tipoSolicitudUbicacion' => ['required', Rule::in([
+                SolicitudUbicacion::TIPO_PAIS,
+                SolicitudUbicacion::TIPO_PROVINCIA,
+                SolicitudUbicacion::TIPO_CIUDAD,
+            ])],
+            'nombreUbicacionSolicitada' => ['required', 'string', 'max:'.$maxNombre],
+            'observacionSolicitudUbicacion' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'nombreUbicacionSolicitada.required' => 'Ingresa el nombre solicitado.',
+        ]);
+
+        // Normalización estricta del nombre (Capitalizado de palabras con soporte UTF-8)
+        $nombre = mb_convert_case(trim($this->nombreUbicacionSolicitada), MB_CASE_TITLE, "UTF-8");
+
+        if ($nombre === '') {
+            throw ValidationException::withMessages([
+                'nombreUbicacionSolicitada' => 'Ingresa el nombre solicitado.',
+            ]);
+        }
+
+        $data = [
+            'tipo' => $this->tipoSolicitudUbicacion,
+            'estado' => SolicitudUbicacion::ESTADO_PENDIENTE,
+            'observacion_solicitante' => $this->observacionSolicitudUbicacion,
+            'solicitado_por_id' => $user->id,
+        ];
+
+        // Validaciones contra duplicados según el tipo y su contexto geográfico
+        if ($this->tipoSolicitudUbicacion === SolicitudUbicacion::TIPO_PAIS) {
+            if (Pais::query()->where('pais_nombre', $nombre)->exists()) {
+                throw ValidationException::withMessages(['nombreUbicacionSolicitada' => 'Este país ya se encuentra registrado en el sistema.']);
+            }
+            if (SolicitudUbicacion::query()->where('tipo', SolicitudUbicacion::TIPO_PAIS)->where('estado', SolicitudUbicacion::ESTADO_PENDIENTE)->where('nombre_pais_solicitado', $nombre)->exists()) {
+                throw ValidationException::withMessages(['nombreUbicacionSolicitada' => 'Ya existe una solicitud pendiente para registrar este país.']);
+            }
+            $data['nombre_pais_solicitado'] = $nombre;
+        }
+
+        if ($this->tipoSolicitudUbicacion === SolicitudUbicacion::TIPO_PROVINCIA) {
+            if (! $this->pais_id || ! Pais::query()->where('pais_id', $this->pais_id)->exists()) {
+                throw ValidationException::withMessages([
+                    'pais_id' => 'Selecciona un pais valido.',
+                ]);
+            }
+
+            if (Provincia::query()->where('pais_id', $this->pais_id)->where('provincia_nombre', $nombre)->exists()) {
+                throw ValidationException::withMessages(['nombreUbicacionSolicitada' => 'Esta provincia ya se encuentra registrada para el país seleccionado.']);
+            }
+            if (SolicitudUbicacion::query()->where('tipo', SolicitudUbicacion::TIPO_PROVINCIA)->where('estado', SolicitudUbicacion::ESTADO_PENDIENTE)->where('pais_id', $this->pais_id)->where('nombre_provincia_solicitada', $nombre)->exists()) {
+                throw ValidationException::withMessages(['nombreUbicacionSolicitada' => 'Ya existe una solicitud pendiente para esta provincia en el país seleccionado.']);
+            }
+
+            $data['pais_id'] = $this->pais_id;
+            $data['nombre_provincia_solicitada'] = $nombre;
+        }
+
+        if ($this->tipoSolicitudUbicacion === SolicitudUbicacion::TIPO_CIUDAD) {
+            if (! $this->pais_id || ! $this->provincia_id) {
+                throw ValidationException::withMessages([
+                    'provincia_id' => 'Selecciona un pais y una provincia.',
+                ]);
+            }
+
+            $provinciaValida = Provincia::query()
+                ->where('provincia_id', $this->provincia_id)
+                ->where('pais_id', $this->pais_id)
+                ->exists();
+
+            if (! $provinciaValida) {
+                throw ValidationException::withMessages([
+                    'provincia_id' => 'La provincia no pertenece al pais seleccionado.',
+                ]);
+            }
+
+            if (Ciudad::query()->where('provincia_id', $this->provincia_id)->where('ciudad_nombre', $nombre)->exists()) {
+                throw ValidationException::withMessages(['nombreUbicacionSolicitada' => 'Esta ciudad ya se encuentra registrada para la provincia seleccionada.']);
+            }
+            if (SolicitudUbicacion::query()->where('tipo', SolicitudUbicacion::TIPO_CIUDAD)->where('estado', SolicitudUbicacion::ESTADO_PENDIENTE)->where('provincia_id', $this->provincia_id)->where('nombre_ciudad_solicitada', $nombre)->exists()) {
+                throw ValidationException::withMessages(['nombreUbicacionSolicitada' => 'Ya existe una solicitud pendiente para esta ciudad en la provincia seleccionada.']);
+            }
+
+            $data['pais_id'] = $this->pais_id;
+            $data['provincia_id'] = $this->provincia_id;
+            $data['nombre_ciudad_solicitada'] = $nombre;
+        }
+
+        $solicitud = SolicitudUbicacion::create($data);
+
+        $this->notificarAdminsSolicitudUbicacion($solicitud);
+
+        $this->cerrarSolicitudUbicacion();
+
+        Notification::make()
+            ->title('Solicitud enviada. Un administrador la revisara.')
+            ->success()
+            ->send();
+    }
+
+    private function notificarAdminsSolicitudUbicacion(SolicitudUbicacion $solicitud): void
+    {
+        try {
+            $admins = User::query()
+                ->where('role', 'admin')
+                ->where('activo', true)
+                ->whereNotNull('email')
+                ->get();
+
+            if ($admins->isEmpty()) {
+                Log::info('No hay administradores activos con email para notificar una solicitud de ubicacion.', [
+                    'solicitud_id' => $solicitud->id,
+                ]);
+
+                return;
+            }
+
+            foreach ($admins as $admin) {
+                Mail::to($admin->email)->send(new SolicitudUbicacionCreada($solicitud));
+            }
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo enviar el correo de solicitud de ubicacion al administrador.', [
+                'solicitud_id' => $solicitud->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function eliminarFoto(): void

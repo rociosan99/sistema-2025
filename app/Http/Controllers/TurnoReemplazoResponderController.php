@@ -20,7 +20,14 @@ class TurnoReemplazoResponderController extends Controller
         }
 
         if ((int) $turnoReemplazo->alumno_id !== (int) Auth::id()) {
-            abort(403);
+            $intendedUrl = $request->fullUrl();
+
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            $request->session()->put('url.intended', $intendedUrl);
+
+            return redirect()->route('filament.alumno.auth.login');
         }
 
         if (! in_array($accion, ['aceptar', 'rechazar'], true)) {

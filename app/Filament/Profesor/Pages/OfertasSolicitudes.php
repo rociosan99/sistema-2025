@@ -148,15 +148,29 @@ class OfertasSolicitudes extends Page
                 continue;
             }
 
+            $fecha = $solicitud->fecha->toDateString();
+            $slotInicio = $this->normalizarHora((string) ($oferta->hora_inicio ?? $solicitud->hora_inicio));
+            $slotFin = $this->normalizarHora((string) ($oferta->hora_fin ?? $solicitud->hora_fin));
+
+            // 🌟 LÓGICA DE NEGOCIO INCORPORADA: Regla de Oro para Vencimientos
+            // Armamos el inicio exacto de la clase particular
+            $inicioClaseDatetime = Carbon::parse($fecha . ' ' . $slotInicio);
+
+            // Si la oferta de base de datos dice que vence después del inicio de la clase,
+            // o si la clase ya empezó en tiempo real, se fuerza la expiración inmediata en la BD.
+            if ($oferta->expires_at->gt($inicioClaseDatetime) || $inicioClaseDatetime->lte(now())) {
+                $oferta->update([
+                    'estado' => OfertaSolicitud::ESTADO_EXPIRADA,
+                    'expires_at' => $inicioClaseDatetime->min($oferta->expires_at) 
+                ]);
+                continue;
+            }
+
             if ($solicitud->expires_at && $solicitud->expires_at->lte(now())) {
                 $solicitud->update(['estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA]);
                 $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                 continue;
             }
-
-            $fecha = $solicitud->fecha->toDateString();
-            $slotInicio = $this->normalizarHora((string) ($oferta->hora_inicio ?? $solicitud->hora_inicio));
-            $slotFin = $this->normalizarHora((string) ($oferta->hora_fin ?? $solicitud->hora_fin));
 
             // No mostrar horarios que ya empezaron o pasaron.
             if ($this->slotYaNoEsAceptable($fecha, $slotInicio)) {
@@ -191,9 +205,16 @@ class OfertasSolicitudes extends Page
                 $alumnoNombre = $solicitud->alumno?->name ?? '-';
             }
 
+            // Leemos los minutos de cortesía desde el archivo .env (default: 60 minutos)
+            $minutosConfig = (int) env('OFERTA_VENCIMIENTO_MINUTOS', 60);
+            $vencimientoDinamicoEstandar = $oferta->created_at ? $oferta->created_at->copy()->addMinutes($minutosConfig) : now()->addMinutes($minutosConfig);
+            
+            // Evaluamos visualmente el menor vencimiento real aplicable
+            $vencimientoRealCálculo = $vencimientoDinamicoEstandar->min($inicioClaseDatetime);
+
             $visibles[] = [
                 'id' => $oferta->id,
-                'expires_at' => $oferta->expires_at?->format('d/m/Y H:i') ?? '-',
+                'expires_at' => $vencimientoRealCálculo->format('d/m/Y H:i'),
                 'solicitud_id' => $solicitud->id,
 
                 'recomendada' => $recomendada,
@@ -242,7 +263,7 @@ class OfertasSolicitudes extends Page
         ]);
 
         Notification::make()
-            ->title('Oferta rechazada')
+            ->title('Oferta Docente rechazada')
             ->success()
             ->send();
 
@@ -265,14 +286,21 @@ class OfertasSolicitudes extends Page
                     throw new \RuntimeException('La oferta ya fue procesada.');
                 }
 
-                if ($oferta->expires_at->lte(now())) {
-                    $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
-                    throw new \RuntimeException('La oferta venció.');
-                }
-
                 $solicitud = SolicitudDisponibilidad::query()
                     ->lockForUpdate()
                     ->findOrFail($oferta->solicitud_id);
+
+                $fecha = $solicitud->fecha->toDateString();
+                $slotInicio = $this->normalizarHora((string) ($oferta->hora_inicio ?? $solicitud->hora_inicio));
+                $slotFin = $this->normalizarHora((string) ($oferta->hora_fin ?? $solicitud->hora_fin));
+
+                // 🌟 CERROJO DE SEGURIDAD ESTRICTO EN TRANSACCIÓN:
+                // Si la clase ya comenzó en el tiempo real, se aborta la creación del turno.
+                $inicioClaseDatetime = Carbon::parse($fecha . ' ' . $slotInicio);
+                if ($inicioClaseDatetime->lte(now()) || $oferta->expires_at->lte(now())) {
+                    $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
+                    throw new \RuntimeException('El horario de esta clase ya comenzó o la oferta expiró.');
+                }
 
                 if ($solicitud->estado !== SolicitudDisponibilidad::ESTADO_ACTIVA) {
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
@@ -284,10 +312,6 @@ class OfertasSolicitudes extends Page
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
                     throw new \RuntimeException('La solicitud expiró.');
                 }
-
-                $fecha = $solicitud->fecha->toDateString();
-                $slotInicio = $this->normalizarHora((string) ($oferta->hora_inicio ?? $solicitud->hora_inicio));
-                $slotFin = $this->normalizarHora((string) ($oferta->hora_fin ?? $solicitud->hora_fin));
 
                 if ($this->slotYaNoEsAceptable($fecha, $slotInicio)) {
                     $oferta->update(['estado' => OfertaSolicitud::ESTADO_EXPIRADA]);
@@ -352,13 +376,13 @@ class OfertasSolicitudes extends Page
             });
 
             Notification::make()
-                ->title('Oferta aceptada')
+                ->title('Oferta aceptada con éxito')
                 ->body('Se creó el turno y el alumno podrá pagarlo.')
                 ->success()
                 ->send();
         } catch (\Throwable $e) {
             Notification::make()
-                ->title('No se pudo aceptar')
+                ->title('No se pudo procesar la oferta')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();

@@ -101,6 +101,11 @@
                             @endforeach
                         </select>
                         @error('pais_id') <div style="font-size:12px; color:#b91c1c;">{{ $message }}</div> @enderror
+                        <button type="button"
+                                wire:click="abrirSolicitudPais"
+                                style="align-self:flex-start; border:none; background:transparent; padding:0; color:#b45309; font-size:12px; font-weight:800; cursor:pointer;">
+                            No encuentro mi pais
+                        </button>
                     @else
                         <div style="padding:10px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb;">
                             @if($pais_id && isset($this->paisesOptions[$pais_id]))
@@ -124,6 +129,11 @@
                             @endforeach
                         </select>
                         @error('provincia_id') <div style="font-size:12px; color:#b91c1c;">{{ $message }}</div> @enderror
+                        <button type="button"
+                                wire:click="abrirSolicitudProvincia"
+                                style="align-self:flex-start; border:none; background:transparent; padding:0; color:#b45309; font-size:12px; font-weight:800; cursor:pointer;">
+                            No encuentro mi provincia
+                        </button>
                     @else
                         <div style="padding:10px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb;">
                             @if($provincia_id && isset($this->provinciasOptions[$provincia_id]))
@@ -147,6 +157,11 @@
                             @endforeach
                         </select>
                         @error('ciudad_id') <div style="font-size:12px; color:#b91c1c;">{{ $message }}</div> @enderror
+                        <button type="button"
+                                wire:click="abrirSolicitudCiudad"
+                                style="align-self:flex-start; border:none; background:transparent; padding:0; color:#b45309; font-size:12px; font-weight:800; cursor:pointer;">
+                            No encuentro mi ciudad
+                        </button>
                     @else
                         <div style="padding:10px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb;">
                             @if($ciudad_id && isset($this->ciudadesOptions[$ciudad_id]))
@@ -315,6 +330,83 @@
                 @endif
             </div>
         </div>
+
+        @if($modalSolicitudUbicacionAbierto)
+            @php
+                $tipoSolicitudLabel = match ($tipoSolicitudUbicacion) {
+                    \App\Models\SolicitudUbicacion::TIPO_PAIS => 'pais',
+                    \App\Models\SolicitudUbicacion::TIPO_PROVINCIA => 'provincia',
+                    \App\Models\SolicitudUbicacion::TIPO_CIUDAD => 'ciudad',
+                    default => 'ubicacion',
+                };
+            @endphp
+
+            <div style="position:fixed; inset:0; z-index:50; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; padding:18px;">
+                <div style="width:100%; max-width:520px; border-radius:14px; background:#fff; box-shadow:0 24px 60px rgba(15,23,42,.25); overflow:hidden;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 18px; border-bottom:1px solid #e5e7eb;">
+                        <div style="font-size:16px; font-weight:900;">Solicitar {{ $tipoSolicitudLabel }}</div>
+                        <button type="button"
+                                wire:click="cerrarSolicitudUbicacion"
+                                style="border:none; background:transparent; cursor:pointer; font-size:22px; line-height:1; color:#6b7280;">
+                            &times;
+                        </button>
+                    </div>
+
+                    <div style="padding:18px; display:flex; flex-direction:column; gap:14px;">
+                        @if($tipoSolicitudUbicacion === \App\Models\SolicitudUbicacion::TIPO_PROVINCIA && $pais_id && isset($this->paisesOptions[$pais_id]))
+                            <div style="font-size:13px; color:#4b5563;">
+                                Pais seleccionado: <strong>{{ $this->paisesOptions[$pais_id] }}</strong>
+                            </div>
+                        @endif
+
+                        @if($tipoSolicitudUbicacion === \App\Models\SolicitudUbicacion::TIPO_CIUDAD)
+                            <div style="font-size:13px; color:#4b5563;">
+                                @if($pais_id && isset($this->paisesOptions[$pais_id]))
+                                    Pais seleccionado: <strong>{{ $this->paisesOptions[$pais_id] }}</strong>
+                                @endif
+
+                                @if($provincia_id && isset($this->provinciasOptions[$provincia_id]))
+                                    <br>Provincia seleccionada: <strong>{{ $this->provinciasOptions[$provincia_id] }}</strong>
+                                @endif
+                            </div>
+                        @endif
+
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <label style="font-weight:900;">Nombre de {{ $tipoSolicitudLabel }}</label>
+                            <input type="text"
+                                   wire:model.live="nombreUbicacionSolicitada"
+                                   style="border:1px solid #d1d5db; border-radius:12px; padding:10px;">
+                            @error('nombreUbicacionSolicitada') <div style="font-size:12px; color:#b91c1c;">{{ $message }}</div> @enderror
+                        </div>
+
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <label style="font-weight:900;">Observacion opcional</label>
+                            <textarea wire:model.live="observacionSolicitudUbicacion"
+                                      rows="3"
+                                      style="border:1px solid #d1d5db; border-radius:12px; padding:10px;"></textarea>
+                            @error('observacionSolicitudUbicacion') <div style="font-size:12px; color:#b91c1c;">{{ $message }}</div> @enderror
+                        </div>
+
+                        <div style="display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;">
+                            <x-filament::button color="gray" wire:click="cerrarSolicitudUbicacion">
+                                Cancelar
+                            </x-filament::button>
+
+                            <x-filament::button
+                                color="primary"
+                                icon="heroicon-o-paper-airplane"
+                                wire:click="enviarSolicitudUbicacion"
+                                wire:target="enviarSolicitudUbicacion"
+                                wire:loading.attr="disabled"
+                            >
+                                <span wire:loading.remove wire:target="enviarSolicitudUbicacion">Enviar solicitud</span>
+                                <span wire:loading wire:target="enviarSolicitudUbicacion">Enviando...</span>
+                            </x-filament::button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
 
     </div>
 </x-filament-panels::page>
