@@ -2,6 +2,7 @@
 
 namespace App\Filament\Profesor\Resources\Turnos\Tables;
 
+use App\Mail\AlumnoClaseSuspendidaPorProfesor;
 use App\Mail\ProfesorRespondioTurno;
 use App\Models\Turno;
 use App\Services\AuditLogger;
@@ -57,7 +58,10 @@ class TurnosTable
                         'warning' => Turno::ESTADO_PENDIENTE,
                         'primary' => Turno::ESTADO_PENDIENTE_PAGO,
                         'success' => Turno::ESTADO_CONFIRMADO,
-                        'danger'  => Turno::ESTADO_RECHAZADO,
+                        'danger'  => [
+                            Turno::ESTADO_RECHAZADO,
+                            Turno::ESTADO_SUSPENDIDO_PROFESOR,
+                        ],
                         'gray'    => Turno::ESTADO_VENCIDO,
                     ])
                     ->formatStateUsing(function ($state, Turno $record) {
@@ -72,6 +76,7 @@ class TurnosTable
                             Turno::ESTADO_PENDIENTE      => 'Pendiente',
                             Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
                             Turno::ESTADO_CONFIRMADO     => 'Clase pagada',
+                            Turno::ESTADO_SUSPENDIDO_PROFESOR => 'Suspendido por profesor',
                             Turno::ESTADO_RECHAZADO      => 'Rechazado',
                             Turno::ESTADO_CANCELADO      => 'Cancelado',
                             Turno::ESTADO_VENCIDO        => 'Vencido',
@@ -105,6 +110,7 @@ class TurnosTable
                         Turno::ESTADO_RECHAZADO      => 'Rechazado',
                         Turno::ESTADO_CANCELADO      => 'Cancelado',
                         Turno::ESTADO_VENCIDO        => 'Vencido',
+                        Turno::ESTADO_SUSPENDIDO_PROFESOR => 'Suspendido por profesor',
                         Turno::ESTADO_ACEPTADO       => 'Aceptado (legacy)',
                     ])
                     ->native(false),
@@ -238,6 +244,57 @@ class TurnosTable
                             'enlace_anterior' => $enlaceAnterior,
                             'enlace_nuevo' => $record->enlace_clase,
                         ]);
+                    }),
+
+                Action::make('suspender')
+                    ->label('Suspender clase')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->form([
+                        TextInput::make('suspension_motivo')
+                            ->label('Motivo de suspensión')
+                            ->required()
+                            ->maxLength(1000)
+                            ->placeholder('Describe brevemente por qué se suspende la clase'),
+                    ])
+                    ->visible(fn (Turno $record) =>
+                        $record->estado === Turno::ESTADO_CONFIRMADO &&
+                        ! self::estaVencido($record)
+                    )
+                    ->action(function (Turno $record, array $data) {
+                        if ($record->estado !== Turno::ESTADO_CONFIRMADO) {
+                            return;
+                        }
+
+                        /** @var AuditLogger $audit */
+                        $audit = app(AuditLogger::class);
+
+                        $estadoAntes = (string) $record->estado;
+
+                        $record->update([
+                            'estado' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
+                            'suspendido_at' => now(),
+                            'suspendido_por_id' => Auth::id(),
+                            'suspension_motivo' => trim((string) $data['suspension_motivo']),
+                        ]);
+
+                        $audit->log('turno.suspendido_profesor', $record, [
+                            'turno_id' => $record->id,
+                            'profesor_id' => $record->profesor_id,
+                            'alumno_id' => $record->alumno_id,
+                            'estado_anterior' => $estadoAntes,
+                            'estado_nuevo' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
+                            'suspendido_por_id' => Auth::id(),
+                            'suspension_motivo' => $record->suspension_motivo,
+                            'fecha' => (string) $record->fecha,
+                            'hora_inicio' => (string) $record->hora_inicio,
+                            'hora_fin' => (string) $record->hora_fin,
+                        ]);
+
+                        $emailAlumno = $record->alumno?->email;
+                        if ($emailAlumno) {
+                            Mail::to($emailAlumno)->send(new AlumnoClaseSuspendidaPorProfesor($record));
+                        }
                     }),
 
                 Action::make('rechazar')

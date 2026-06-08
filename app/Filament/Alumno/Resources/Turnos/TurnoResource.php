@@ -45,6 +45,7 @@ class TurnoResource extends Resource
                         'info'    => Turno::ESTADO_ACEPTADO,
                         'primary' => Turno::ESTADO_PENDIENTE_PAGO,
                         'success' => Turno::ESTADO_CONFIRMADO,
+                        'secondary' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
                         'danger'  => Turno::ESTADO_RECHAZADO,
                         'gray'    => Turno::ESTADO_VENCIDO,
                     ])
@@ -53,6 +54,7 @@ class TurnoResource extends Resource
                         Turno::ESTADO_ACEPTADO => 'Aceptado',
                         Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
                         Turno::ESTADO_CONFIRMADO => 'Clase pagada',
+                        Turno::ESTADO_SUSPENDIDO_PROFESOR => 'Suspendido por profesor',
                         Turno::ESTADO_RECHAZADO => 'Rechazado',
                         Turno::ESTADO_CANCELADO => 'Cancelado',
                         Turno::ESTADO_VENCIDO => 'Vencido',
@@ -116,6 +118,7 @@ class TurnoResource extends Resource
                         Turno::ESTADO_PENDIENTE      => 'Pendiente',
                         Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
                         Turno::ESTADO_CONFIRMADO     => 'Clase pagada',
+                        Turno::ESTADO_SUSPENDIDO_PROFESOR => 'Suspendido por profesor',
                         Turno::ESTADO_RECHAZADO      => 'Rechazado',
                         Turno::ESTADO_CANCELADO      => 'Cancelado',
                         Turno::ESTADO_VENCIDO        => 'Vencido',
@@ -165,15 +168,17 @@ class TurnoResource extends Resource
                             ->when($data['hasta'] ?? null, fn (Builder $q, $hasta) => $q->whereDate('fecha', '<=', $hasta));
                     }),
             ])
-            ->defaultSort('fecha', 'asc')
+            ->defaultSort('fecha', 'desc')
             ->emptyStateHeading('No tenés turnos aún')
             ->emptyStateDescription('Solicitá un turno desde el botón "Solicitar turno".');
     }
 
-    public static function getEloquentQuery(): Builder
+   public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->where('alumno_id', Auth::id());
+            ->where('alumno_id', Auth::id())
+            ->orderByDesc('fecha')
+            ->orderByDesc('hora_inicio');
     }
 
     public static function getPages(): array

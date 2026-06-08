@@ -3,6 +3,7 @@
 namespace App\Filament\Alumno\Pages;
 
 use App\Jobs\ProcesarReemplazoTurnoCanceladoJob;
+use App\Mail\ProfesorClaseSuspendidaReprogramada;
 use App\Mail\ProfesorTurnoReprogramado;
 use App\Models\Turno;
 use App\Models\User;
@@ -50,7 +51,7 @@ class ReprogramarTurno extends Page
             return;
         }
 
-        $turno = Turno::with(['profesor', 'materia', 'tema'])->find($turnoId);
+        $turno = Turno::with(['profesor', 'materia', 'tema', 'pago'])->find($turnoId);
 
         if (! $turno) {
             $this->errorMensaje = 'El turno no existe.';
@@ -70,17 +71,31 @@ class ReprogramarTurno extends Page
             Turno::ESTADO_PENDIENTE,
             Turno::ESTADO_PENDIENTE_PAGO,
             Turno::ESTADO_CONFIRMADO,
+            Turno::ESTADO_SUSPENDIDO_PROFESOR,
+            Turno::ESTADO_CANCELADO,
         ], true)) {
             $this->errorMensaje = 'Este turno no se puede reprogramar.';
             return;
         }
 
-        $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
-        $horasHastaInicio = now()->diffInHours($turno->inicioDateTime(), false);
+        if ($turno->estado === Turno::ESTADO_SUSPENDIDO_PROFESOR) {
+            if (! $turno->pago) {
+                $this->errorMensaje = 'No se puede reprogramar porque el turno no tiene un pago asociado.';
+                return;
+            }
 
-        if ($horasHastaInicio < $horasRegla) {
-            $this->errorMensaje = 'Solo podés reprogramar con al menos 24 horas de anticipación.';
-            return;
+            if (! $turno->pago->estaAprobado()) {
+                $this->errorMensaje = 'No se puede reprogramar porque el pago asociado aún no está aprobado.';
+                return;
+            }
+        } else {
+            $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
+            $horasHastaInicio = now()->diffInHours($turno->inicioDateTime(), false);
+
+            if ($horasHastaInicio < $horasRegla) {
+                $this->errorMensaje = 'Solo podés reprogramar con al menos 24 horas de anticipación.';
+                return;
+            }
         }
 
         $this->turnoOriginal = $turno;
@@ -116,6 +131,12 @@ class ReprogramarTurno extends Page
             )
             ->toArray();
 
+        if ($this->turnoOriginal->estado === Turno::ESTADO_SUSPENDIDO_PROFESOR) {
+            $slots = array_values(array_filter($slots, function (array $slot) {
+                return (int) ($slot['profesor_id'] ?? 0) === (int) $this->turnoOriginal->profesor_id;
+            }));
+        }
+
         $this->slots = $this->filtrarSlotsProfesoresActivos($slots);
     }
 
@@ -148,6 +169,92 @@ class ReprogramarTurno extends Page
         $horaInicioOriginal = (string) $this->turnoOriginal->hora_inicio;
         $horaFinOriginal = (string) $this->turnoOriginal->hora_fin;
         $alumnoExcluidoId = (int) $this->turnoOriginal->alumno_id;
+
+        if ($this->turnoOriginal->estado === Turno::ESTADO_SUSPENDIDO_PROFESOR) {
+            DB::transaction(function () use ($slot) {
+                $profesorActivo = User::query()
+                    ->whereKey($slot['profesor_id'])
+                    ->where('role', 'profesor')
+                    ->where('activo', true)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $profesorActivo) {
+                    throw ValidationException::withMessages([
+                        'slot' => 'El profesor de ese horario ya no está disponible.',
+                    ]);
+                }
+
+                $hayChoque = Turno::query()
+                    ->where('profesor_id', $slot['profesor_id'])
+                    ->whereDate('fecha', $slot['fecha'])
+                    ->where(function ($q) use ($slot) {
+                        $q->where('hora_inicio', '<', $slot['hora_fin'])
+                            ->where('hora_fin', '>', $slot['hora_inicio']);
+                    })
+                    ->whereIn('estado', [
+                        Turno::ESTADO_PENDIENTE,
+                        Turno::ESTADO_ACEPTADO,
+                        Turno::ESTADO_PENDIENTE_PAGO,
+                        Turno::ESTADO_CONFIRMADO,
+                    ])
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($hayChoque) {
+                    throw ValidationException::withMessages([
+                        'slot' => 'Ese horario ya no está disponible.',
+                    ]);
+                }
+
+                $this->turnoOriginal->refresh();
+
+                $this->turnoOriginal->update([
+                    'fecha' => $slot['fecha'],
+                    'hora_inicio' => $slot['hora_inicio'],
+                    'hora_fin' => $slot['hora_fin'],
+                    'estado' => Turno::ESTADO_CONFIRMADO,
+                ]);
+            });
+
+            $this->turnoOriginal = Turno::with(['profesor', 'alumno', 'materia', 'tema', 'pago'])
+                ->find($turnoOriginalId);
+
+            $audit->log('turno.reprogramado', $this->turnoOriginal, [
+                'turno_id' => $this->turnoOriginal->id,
+                'alumno_id' => $this->turnoOriginal->alumno_id,
+                'profesor_id' => $this->turnoOriginal->profesor_id,
+                'materia_id' => $this->turnoOriginal->materia_id,
+                'tema_id' => $this->turnoOriginal->tema_id,
+                'estado_original_anterior' => $estadoOriginalAntes,
+                'estado_original_nuevo' => Turno::ESTADO_CONFIRMADO,
+                'fecha_original' => $fechaOriginal,
+                'hora_inicio_original' => $horaInicioOriginal,
+                'hora_fin_original' => $horaFinOriginal,
+                'fecha_nueva' => $this->turnoOriginal->fecha ? $this->turnoOriginal->fecha->toDateString() : null,
+                'hora_inicio_nueva' => (string) $this->turnoOriginal->hora_inicio,
+                'hora_fin_nueva' => (string) $this->turnoOriginal->hora_fin,
+                'suspendido_por_id' => $this->turnoOriginal->suspendido_por_id,
+                'suspension_motivo' => $this->turnoOriginal->suspension_motivo,
+            ]);
+
+            Notification::make()
+                ->title('Turno reprogramado')
+                ->body('Se actualizó la clase suspendida. El pago sigue vigente y se mantiene el mismo profesor.')
+                ->success()
+                ->send();
+
+            if ($this->turnoOriginal->profesor?->email) {
+                Mail::to($this->turnoOriginal->profesor->email)
+                    ->send(new ProfesorClaseSuspendidaReprogramada($this->turnoOriginal));
+            }
+
+            if ($this->fecha) {
+                $this->consultar();
+            }
+
+            return;
+        }
 
         DB::transaction(function () use (
             $slot,

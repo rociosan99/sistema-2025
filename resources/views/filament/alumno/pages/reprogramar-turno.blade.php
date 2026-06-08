@@ -14,6 +14,13 @@
                     Reprogramar clase
                 </div>
 
+                @if($this->turnoOriginal->estado === \App\Models\Turno::ESTADO_SUSPENDIDO_PROFESOR)
+                    <div style="margin-top:12px; padding:14px; border-radius:12px; background:#fffbeb; border:1px solid #fef3c7; color:#92400e;">
+                        <strong>⚠️ Atención:</strong> esta clase fue suspendida por el profesor.
+                        El pago sigue vigente y la reprogramación se realizará con el mismo profesor sin necesidad de pagar de nuevo.
+                    </div>
+                @endif
+
                 <p style="margin:8px 0 0 0; font-size:13px; color:#6b7280; line-height:1.6;">
                     Turno original:
                     <strong>{{ $this->turnoOriginal->fecha->format('d/m/Y') }}</strong>

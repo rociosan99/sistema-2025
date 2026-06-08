@@ -13,7 +13,9 @@ return new class extends Migration
      * recreando cada constraint en pasos separados.
      */
     public function up(): void
-    {
+    {   
+        
+
         foreach ($this->foreignKeys() as $foreignKey) {
             $this->replaceDeleteAction($foreignKey, null);
         }
@@ -24,6 +26,7 @@ return new class extends Migration
      */
     public function down(): void
     {
+         
         foreach ($this->foreignKeys() as $foreignKey) {
             $this->replaceDeleteAction($foreignKey, $foreignKey['original_delete']);
         }

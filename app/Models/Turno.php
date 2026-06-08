@@ -5,6 +5,11 @@ namespace App\Models;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
+use App\Models\Materia;
+use App\Models\Tema;
+use App\Models\Pago;
+use App\Models\CalificacionProfesor;
 
 // ✅ Spatie Activitylog
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -25,6 +30,7 @@ class Turno extends Model
     public const ESTADO_CONFIRMADO      = 'confirmado';
     public const ESTADO_CANCELADO       = 'cancelado';
     public const ESTADO_VENCIDO         = 'vencido';
+    public const ESTADO_SUSPENDIDO_PROFESOR = 'suspendido_profesor';
 
     protected $fillable = [
         'alumno_id',
@@ -49,6 +55,11 @@ class Turno extends Model
         'reprogramado_por_turno_id',
         'reprogramado_at',
 
+        // ✅ suspensión por profesor
+        'suspendido_at',
+        'suspendido_por_id',
+        'suspension_motivo',
+
         // ✅ si lo tenés en DB
         'recordatorio_24h_enviado_at',
 
@@ -70,6 +81,9 @@ class Turno extends Model
 
         // ✅ reprogramación
         'reprogramado_at' => 'datetime',
+
+        // ✅ suspensión por profesor
+        'suspendido_at' => 'datetime',
 
         'asistencia_confirmada_at' => 'datetime',
         'asistencia_cancelada_at' => 'datetime',
@@ -100,6 +114,11 @@ class Turno extends Model
                 // ✅ reprogramación
                 'reprogramado_por_turno_id',
                 'reprogramado_at',
+
+                // ✅ suspensión por profesor
+                'suspendido_at',
+                'suspendido_por_id',
+                'suspension_motivo',
 
                 'asistencia_confirmada_at',
                 'asistencia_cancelada_at',
@@ -153,6 +172,11 @@ class Turno extends Model
     public function turnoReprogramado()
     {
         return $this->belongsTo(self::class, 'reprogramado_por_turno_id');
+    }
+
+    public function suspendidoPor()
+    {
+        return $this->belongsTo(User::class, 'suspendido_por_id');
     }
 
     // Helpers
