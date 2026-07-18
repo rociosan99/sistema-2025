@@ -179,6 +179,14 @@ class Dashboard extends Page
                         4 => '⭐⭐⭐⭐',
                         5 => '⭐⭐⭐⭐⭐',
                     ])
+                    ->descriptions([
+                        1 => 'Muy malo',
+                        2 => 'Malo',
+                        3 => 'Regular',
+                        4 => 'Bueno',
+                        5 => 'Excelente',
+                    ])
+                    ->inline(false)
                     ->required(),
 
                 Textarea::make('comentario')

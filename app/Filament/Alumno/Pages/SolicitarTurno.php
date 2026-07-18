@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Services\SlotService;
 use BackedEnum;
 use Carbon\Carbon;
-use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +36,8 @@ class SolicitarTurno extends Page
 
     public ?string $fecha = null;
     public array $slots = [];
+
+    public bool $mostrarModalExito = false;
 
     protected SlotService $slotService;
 
@@ -260,13 +261,13 @@ class SolicitarTurno extends Page
                 ->send(new TurnoSolicitado($turno));
         });
 
-        Notification::make()
-            ->title('Turno solicitado')
-            ->body('El profesor recibirá tu solicitud.')
-            ->success()
-            ->send();
-
         $this->consultarAhora();
+        $this->mostrarModalExito = true;
+    }
+
+    public function cerrarModalExito(): void
+    {
+        $this->mostrarModalExito = false;
     }
 
     private function filtrarSlotsProfesoresActivos(array $slots): array

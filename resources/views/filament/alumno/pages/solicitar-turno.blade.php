@@ -480,4 +480,97 @@
         @endif
 
     </div>
+
+    @if ($mostrarModalExito)
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-exito-titulo"
+            style="
+                position: fixed;
+                inset: 0;
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                background: rgba(15, 23, 42, 0.68);
+            "
+        >
+            <div
+                style="
+                    width: 100%;
+                    max-width: 440px;
+                    padding: 32px 28px 26px;
+                    border-radius: 18px;
+                    background: #ffffff;
+                    text-align: center;
+                    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+                "
+            >
+                <div
+                    aria-hidden="true"
+                    style="
+                        width: 72px;
+                        height: 72px;
+                        margin: 0 auto 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 9999px;
+                        background: #dcfce7;
+                        color: #16a34a;
+                    "
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        style="width: 40px; height: 40px;"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="m5 12 4 4L19 6"
+                        />
+                    </svg>
+                </div>
+
+                <h2
+                    id="modal-exito-titulo"
+                    style="
+                        margin: 0;
+                        color: #111827;
+                        font-size: 22px;
+                        font-weight: 800;
+                        line-height: 1.3;
+                    "
+                >
+                    Solicitud enviada correctamente
+                </h2>
+
+                <p
+                    style="
+                        margin: 14px 0 24px;
+                        color: #4b5563;
+                        font-size: 15px;
+                        line-height: 1.6;
+                    "
+                >
+                    El profesor deberá aceptar el turno. Te avisaremos cuando responda.
+                </p>
+
+                <x-filament::button
+                    type="button"
+                    wire:click="cerrarModalExito"
+                    wire:loading.attr="disabled"
+                    wire:target="cerrarModalExito"
+                >
+                    Aceptar
+                </x-filament::button>
+            </div>
+        </div>
+    @endif
 </x-filament-panels::page>

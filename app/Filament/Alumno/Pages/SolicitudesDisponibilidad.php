@@ -57,19 +57,72 @@ class SolicitudesDisponibilidad extends Page
             ->all();
     }
 
-    public function crearSolicitud(): void
+   public function crearSolicitud(): void
     {
         if (! $this->materiaId) {
-            throw ValidationException::withMessages(['materiaId' => 'Seleccioná una materia.']);
+            throw ValidationException::withMessages([
+                'materiaId' => 'Seleccioná una materia.'
+            ]);
         }
+
         if (! $this->fecha) {
-            throw ValidationException::withMessages(['fecha' => 'Seleccioná una fecha.']);
+    throw ValidationException::withMessages([
+        'fecha' => 'Seleccioná una fecha.'
+    ]);
+}
+
+// No permitir fechas pasadas
+$fechaSeleccionada = strtotime($this->fecha);
+$hoy = strtotime(date('Y-m-d'));
+
+if ($fechaSeleccionada < $hoy) {
+    throw ValidationException::withMessages([
+        'fecha' => 'No podés crear solicitudes para fechas pasadas.'
+    ]);
+}
+
+// Si es hoy, la hora de inicio no puede haber pasado
+    if ($this->fecha === date('Y-m-d') && $this->horaInicio) {
+        $ahora = strtotime(date('H:i'));
+        $horaInicio = strtotime($this->horaInicio);
+
+        if ($horaInicio <= $ahora) {
+            throw ValidationException::withMessages([
+                'hora' => 'La hora de inicio debe ser posterior a la hora actual.'
+            ]);
         }
+    }
+
         if (! $this->horaInicio || ! $this->horaFin) {
-            throw ValidationException::withMessages(['hora' => 'Ingresá hora inicio y fin.']);
+            throw ValidationException::withMessages([
+                'hora' => 'Ingresá hora inicio y fin.'
+            ]);
         }
+
         if ($this->horaInicio >= $this->horaFin) {
-            throw ValidationException::withMessages(['hora' => 'La hora fin debe ser mayor a la hora inicio.']);
+            throw ValidationException::withMessages([
+                'hora' => 'La hora fin debe ser mayor a la hora inicio.'
+            ]);
+        }
+
+        // Solo horas exactas (15:00, 16:00, etc.)
+        if (
+            !str_ends_with($this->horaInicio, ':00') ||
+            !str_ends_with($this->horaFin, ':00')
+        ) {
+            throw ValidationException::withMessages([
+                'hora' => 'Solo se permiten horarios en horas exactas (ej: 15:00, 16:00).'
+            ]);
+        }
+
+        // Duración mínima de 1 hora
+        $inicio = strtotime($this->horaInicio);
+        $fin = strtotime($this->horaFin);
+
+        if (($fin - $inicio) < 3600) {
+            throw ValidationException::withMessages([
+                'hora' => 'La solicitud debe tener una duración mínima de 1 hora.'
+            ]);
         }
 
         SolicitudDisponibilidad::create([
@@ -80,7 +133,9 @@ class SolicitudesDisponibilidad extends Page
             'hora_inicio' => $this->horaInicio . ':00',
             'hora_fin' => $this->horaFin . ':00',
             'estado' => SolicitudDisponibilidad::ESTADO_ACTIVA,
-            'expires_at' => $this->expiresAt ? date('Y-m-d H:i:s', strtotime($this->expiresAt)) : null,
+            'expires_at' => $this->expiresAt
+                ? date('Y-m-d H:i:s', strtotime($this->expiresAt))
+                : null,
         ]);
 
         Notification::make()
@@ -89,7 +144,6 @@ class SolicitudesDisponibilidad extends Page
             ->success()
             ->send();
 
-        // limpiar
         $this->temaId = null;
         $this->fecha = null;
         $this->horaInicio = null;

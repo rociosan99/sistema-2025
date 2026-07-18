@@ -30,14 +30,47 @@ class DisponibilidadForm
             TimePicker::make('hora_inicio')
                 ->label('Desde')
                 ->seconds(false)
-                ->required(),
+                ->required()
+                ->rule(function () {
+                    return function (string $attribute, $value, Closure $fail) {
+
+                        if (!$value) {
+                            return;
+                        }
+
+                        $minutos = date('i', strtotime($value));
+
+                        if ($minutos !== '00') {
+                            $fail('Solo se permiten horarios en horas exactas (ej: 15:00, 16:00, 17:00).');
+                        }
+                    };
+                }),
 
             TimePicker::make('hora_fin')
                 ->label('Hasta')
                 ->seconds(false)
                 ->required()
+
+                // Hora exacta
+                ->rule(function () {
+                    return function (string $attribute, $value, Closure $fail) {
+
+                        if (!$value) {
+                            return;
+                        }
+
+                        $minutos = date('i', strtotime($value));
+
+                        if ($minutos !== '00') {
+                            $fail('Solo se permiten horarios en horas exactas (ej: 15:00, 16:00, 17:00).');
+                        }
+                    };
+                })
+
+                // Fin mayor que inicio
                 ->rule(function (Get $get) {
                     return function (string $attribute, $value, Closure $fail) use ($get) {
+
                         $inicio = $get('hora_inicio');
                         $fin = $value;
 
@@ -50,5 +83,3 @@ class DisponibilidadForm
         ]);
     }
 }
-
-

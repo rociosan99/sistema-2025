@@ -14,7 +14,9 @@ return new class extends Migration
      */
     public function up(): void
     {   
-        
+        if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
 
         foreach ($this->foreignKeys() as $foreignKey) {
             $this->replaceDeleteAction($foreignKey, null);
@@ -26,7 +28,9 @@ return new class extends Migration
      */
     public function down(): void
     {
-         
+         if (DB::getDriverName() === 'sqlite') {
+            return;
+        }
         foreach ($this->foreignKeys() as $foreignKey) {
             $this->replaceDeleteAction($foreignKey, $foreignKey['original_delete']);
         }
