@@ -420,13 +420,13 @@
                                     background:linear-gradient(180deg,#ffffff 0%, #f8fafc 100%);
                                     box-shadow:0 16px 30px rgba(15,23,42,.10);
                                 ">
-                                    <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
-                                        <div style="flex:1;">
-                                            <div style="font-weight:900; font-size:16px; color:#111827;">
-                                                {{ $s['desde'] }} – {{ $s['hasta'] }}
-                                            </div>
+                                    <div style="font-weight:900; font-size:16px; color:#111827;">
+                                        {{ $s['desde'] }} – {{ $s['hasta'] }}
+                                    </div>
 
-                                            <div style="margin-top:6px; font-size:13px; color:#374151;">
+                                    <div style="margin-top:6px; display:grid; grid-template-columns:minmax(0, 1fr) 120px; column-gap:16px; align-items:start;">
+                                        <div style="grid-column:1; grid-row:1; min-width:0;">
+                                            <div style="font-size:13px; color:#374151;">
                                                 <span style="font-weight:900;">{{ $s['profesor_nombre'] ?? 'Profesor' }}</span>
                                             </div>
 
@@ -450,7 +450,9 @@
                                                     ({{ $cnt }} calificación{{ $cnt === 1 ? '' : 'es' }})
                                                 </span>
                                             </div>
+                                        </div>
 
+                                        <div style="grid-column:1; grid-row:2; min-width:0;">
                                             @if($this->materia)
                                                 <div style="margin-top:10px; font-size:12px; color:#6b7280;">
                                                     📘 {{ $this->materia->materia_nombre }}
@@ -472,9 +474,51 @@
                                             @endif
                                         </div>
 
-                                        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end; min-width:120px;">
+                                        <div style="display:contents;">
+                                            <div style="
+                                                grid-column:2;
+                                                grid-row:1;
+                                                align-self:center;
+                                                justify-self:end;
+                                                width:64px;
+                                                height:64px;
+                                                border-radius:9999px;
+                                                overflow:hidden;
+                                                flex-shrink:0;
+                                                display:flex;
+                                                align-items:center;
+                                                justify-content:center;
+                                                background:#e0e7ff;
+                                                color:#3730a3;
+                                                border:1px solid #c7d2fe;
+                                                font-size:18px;
+                                                font-weight:900;
+                                            ">
+                                                @if(!empty($s['profesor_foto']))
+                                                    <img
+                                                        src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($s['profesor_foto']) }}"
+                                                        alt="Foto de {{ $s['profesor_nombre'] ?? 'profesor' }}"
+                                                        style="width:64px; height:64px; border-radius:9999px; object-fit:cover; flex-shrink:0;"
+                                                    >
+                                                @elseif(!empty($s['profesor_google_avatar']))
+                                                    <img
+                                                        src="{{ $s['profesor_google_avatar'] }}"
+                                                        alt="Foto de {{ $s['profesor_nombre'] ?? 'profesor' }}"
+                                                        style="width:64px; height:64px; border-radius:9999px; object-fit:cover; flex-shrink:0;"
+                                                    >
+                                                @else
+                                                    <span aria-label="Avatar de {{ $s['profesor_nombre'] ?? 'profesor' }}">
+                                                        {{ $s['profesor_iniciales'] ?? 'P' }}
+                                                    </span>
+                                                @endif
+                                            </div>
+
                                             @if($badgeTop)
                                                 <span style="
+                                                    grid-column:2;
+                                                    grid-row:2;
+                                                    justify-self:end;
+                                                    margin-top:8px;
                                                     display:inline-block;
                                                     padding:7px 10px;
                                                     border-radius:12px;
@@ -487,6 +531,10 @@
                                                 </span>
                                             @elseif($badgeNuevo)
                                                 <span style="
+                                                    grid-column:2;
+                                                    grid-row:2;
+                                                    justify-self:end;
+                                                    margin-top:8px;
                                                     display:inline-block;
                                                     padding:7px 10px;
                                                     border-radius:12px;
@@ -499,6 +547,10 @@
                                                 </span>
                                             @elseif($badgeSin)
                                                 <span style="
+                                                    grid-column:2;
+                                                    grid-row:2;
+                                                    justify-self:end;
+                                                    margin-top:8px;
                                                     display:inline-block;
                                                     padding:7px 10px;
                                                     border-radius:12px;

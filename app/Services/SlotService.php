@@ -50,7 +50,14 @@ class SlotService
             ->whereIn('id', $profesoresIds)
             ->where('role', 'profesor')
             ->where('activo', true)
-            ->get(['id', 'name', 'apellido', 'activo']);
+            ->get([
+                'id',
+                'name',
+                'apellido',
+                'activo',
+                'profile_photo_path',
+                'google_avatar_url',
+            ]);
 
         if ($profesores->isEmpty()) {
             return collect();
@@ -77,6 +84,11 @@ class SlotService
             $ratingCnt = $ratingRow?->cant !== null ? (int) $ratingRow->cant : 0;
 
             $nombreCompleto = trim(($profesor->name ?? '') . ' ' . ($profesor->apellido ?? ''));
+            $iniciales = collect([$profesor->name, $profesor->apellido])
+                ->map(fn ($parte) => trim((string) $parte))
+                ->filter()
+                ->map(fn ($parte) => mb_strtoupper(mb_substr($parte, 0, 1)))
+                ->implode('') ?: 'P';
 
             $bloques = Disponibilidad::query()
                 ->where('profesor_id', $profesor->id)
@@ -166,6 +178,9 @@ class SlotService
                     $slots->push([
                         'profesor_id' => $profesor->id,
                         'profesor_nombre' => $nombreCompleto ?: ($profesor->name ?? 'Profesor'),
+                        'profesor_foto' => $profesor->profile_photo_path,
+                        'profesor_google_avatar' => $profesor->google_avatar_url,
+                        'profesor_iniciales' => $iniciales,
                         'fecha' => $fecha->toDateString(),
                         'hora_inicio' => $desde,
                         'hora_fin' => $hasta,
