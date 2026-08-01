@@ -255,6 +255,55 @@
             </div>
         </div>
 
+        {{-- Panel de filtros --}}
+        @if(!empty($slotsOriginales))
+            <div style="border:1px solid #e5e7eb; border-radius:14px; padding:20px; background:#fff; box-shadow:0 10px 22px rgba(15,23,42,.06);">
+                <div style="font-size:15px; font-weight:900; color:#111827; margin-bottom:16px;">
+                    Filtrar turnos disponibles
+                </div>
+
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; align-items:end;">
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                        <label for="filtro-profesor" style="font-size:13px; font-weight:900; color:#111827;">Profesor</label>
+                        <select id="filtro-profesor" wire:model="filtroProfesorId" style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px;">
+                            <option value="">Todos los profesores</option>
+                            @foreach($profesoresDisponibles as $profesorDisponible)
+                                <option value="{{ $profesorDisponible['id'] }}">{{ $profesorDisponible['nombre'] }}</option>
+                            @endforeach
+                        </select>
+                        @error('filtroProfesorId')
+                            <span style="font-size:12px; color:#b91c1c;">{{ $message }}</span>
+                        @enderror
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                        <label for="filtro-hora-desde" style="font-size:13px; font-weight:900; color:#111827;">Hora desde</label>
+                        <input id="filtro-hora-desde" type="time" step="3600" wire:model="filtroHoraDesde" style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px;">
+                        @error('filtroHoraDesde')
+                            <span style="font-size:12px; color:#b91c1c;">{{ $message }}</span>
+                        @enderror
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; gap:7px;">
+                        <label for="filtro-hora-hasta" style="font-size:13px; font-weight:900; color:#111827;">Hora hasta</label>
+                        <input id="filtro-hora-hasta" type="time" step="3600" wire:model="filtroHoraHasta" style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px 12px; background:#fff; font-size:14px;">
+                        @error('filtroHoraHasta')
+                            <span style="font-size:12px; color:#b91c1c;">{{ $message }}</span>
+                        @enderror
+                    </div>
+
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <x-filament::button wire:click="aplicarFiltros" wire:target="aplicarFiltros" wire:loading.attr="disabled">
+                            Aplicar filtros
+                        </x-filament::button>
+                        <x-filament::button color="gray" wire:click="limpiarFiltros" wire:target="limpiarFiltros" wire:loading.attr="disabled">
+                            Limpiar filtros
+                        </x-filament::button>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- Resultado --}}
         @if($fecha)
             <div style="
@@ -290,7 +339,7 @@
                         font-size:12px;
                         font-weight:800;
                     ">
-                        {{ count($slots) }} resultado(s)
+                        {{ count($slots) }} de {{ count($slotsOriginales) }} resultado(s)
                     </div>
                 </div>
 
@@ -315,7 +364,7 @@
                             No podés reservar en fechas pasadas.
                         </div>
 
-                    @elseif(empty($slots))
+                    @elseif(empty($slotsOriginales))
                         <div style="
                             border:1px solid #e5e7eb;
                             background:#f9fafb;
@@ -327,9 +376,21 @@
                             No hay horarios disponibles para esta materia/tema en la fecha seleccionada.
                         </div>
 
+                    @elseif(empty($slots))
+                        <div style="
+                            border:1px solid #bfdbfe;
+                            background:#eff6ff;
+                            padding:14px;
+                            border-radius:12px;
+                            color:#1e40af;
+                            font-size:13px;
+                        ">
+                            Hay horarios disponibles, pero ninguno coincide con los filtros aplicados.
+                        </div>
+
                     @else
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:18px;">
-                            @foreach($slots as $i => $s)
+                            @foreach($slots as $s)
                                 @php
                                     $disabled = $esPasado || ($esHoy && ($s['desde'] < $leadEdge));
                                     $avg = (float)($s['rating_avg'] ?? 0);
@@ -457,12 +518,12 @@
                                             size="sm"
                                             class="w-full"
                                             :disabled="$disabled"
-                                            wire:click="reservar({{ $i }})"
-                                            wire:target="reservar({{ $i }})"
+                                            wire:click="reservar('{{ $s['slot_key'] }}')"
+                                            wire:target="reservar('{{ $s['slot_key'] }}')"
                                             wire:loading.attr="disabled"
                                         >
-                                            <span wire:loading.remove wire:target="reservar({{ $i }})">Reservar</span>
-                                            <span wire:loading wire:target="reservar({{ $i }})">Reservando…</span>
+                                            <span wire:loading.remove wire:target="reservar('{{ $s['slot_key'] }}')">Reservar</span>
+                                            <span wire:loading wire:target="reservar('{{ $s['slot_key'] }}')">Reservando…</span>
                                         </x-filament::button>
 
                                         @if($disabled)

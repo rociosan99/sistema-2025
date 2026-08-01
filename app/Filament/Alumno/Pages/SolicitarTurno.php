@@ -35,7 +35,12 @@ class SolicitarTurno extends Page
     public array $sugerenciasTemas = [];
 
     public ?string $fecha = null;
+    public array $slotsOriginales = [];
     public array $slots = [];
+    public ?int $filtroProfesorId = null;
+    public ?string $filtroHoraDesde = null;
+    public ?string $filtroHoraHasta = null;
+    public array $profesoresDisponibles = [];
 
     public bool $mostrarModalExito = false;
 
@@ -126,6 +131,7 @@ class SolicitarTurno extends Page
 
     public function seleccionarMateria(int $materiaId, string $nombre): void
     {
+        $this->limpiarFiltrosYResultados();
         $this->materiaId = $materiaId;
         $this->materia = Materia::find($materiaId);
         $this->busqueda = $nombre;
@@ -139,6 +145,7 @@ class SolicitarTurno extends Page
 
     public function seleccionarTema(int $temaId, string $nombre): void
     {
+        $this->limpiarFiltrosYResultados();
         $this->temaId = $temaId;
         $this->tema = Tema::find($temaId);
         $this->busqueda = $nombre;
@@ -163,6 +170,21 @@ class SolicitarTurno extends Page
             $this->materiaId = (int) $materiaId;
             $this->materia = Materia::find($materiaId);
         }
+    }
+
+    public function updatedFecha(?string $value): void
+    {
+        $this->profesorId = null;
+        $this->profesor = null;
+        $this->limpiarFiltrosYResultados();
+
+        $this->resetValidation(['fecha', 'slot']);
+
+        if (! $value || ! $this->materiaId) {
+            return;
+        }
+
+        $this->consultarAhora();
     }
 
     public function consultarAhora(): void
@@ -197,22 +219,110 @@ class SolicitarTurno extends Page
             ->obtenerSlotsPorMateria($this->materiaId, $fecha, $this->temaId)
             ->toArray();
 
-        $this->slots = $this->filtrarSlotsProfesoresActivos($slots);
+        $this->slotsOriginales = $this->agregarClavesDeSlot(
+            $this->filtrarSlotsProfesoresActivos($slots)
+        );
+        $this->actualizarProfesoresDisponibles();
+        $this->aplicarFiltros();
     }
 
-    public function reservar(int $index): void
+    public function aplicarFiltros(): void
+    {
+        $this->validate([
+            'filtroProfesorId' => ['nullable', 'integer'],
+            'filtroHoraDesde' => ['nullable', 'date_format:H:i'],
+            'filtroHoraHasta' => ['nullable', 'date_format:H:i'],
+        ]);
+
+        $erroresHorasExactas = [];
+
+        if ($this->filtroHoraDesde && substr($this->filtroHoraDesde, 3, 2) !== '00') {
+            $erroresHorasExactas['filtroHoraDesde'] = 'Solo se permiten horas exactas, por ejemplo 17:00 o 18:00.';
+        }
+
+        if ($this->filtroHoraHasta && substr($this->filtroHoraHasta, 3, 2) !== '00') {
+            $erroresHorasExactas['filtroHoraHasta'] = 'Solo se permiten horas exactas, por ejemplo 17:00 o 18:00.';
+        }
+
+        if ($erroresHorasExactas) {
+            throw ValidationException::withMessages($erroresHorasExactas);
+        }
+
+        if (
+            $this->filtroHoraDesde
+            && $this->filtroHoraHasta
+            && $this->filtroHoraDesde >= $this->filtroHoraHasta
+        ) {
+            throw ValidationException::withMessages([
+                'filtroHoraHasta' => 'La hora desde debe ser menor que la hora hasta.',
+            ]);
+        }
+
+        $this->slots = array_values(array_filter(
+            $this->slotsOriginales,
+            function (array $slot): bool {
+                if (
+                    $this->filtroProfesorId
+                    && (int) $slot['profesor_id'] !== $this->filtroProfesorId
+                ) {
+                    return false;
+                }
+
+                $horaInicio = substr((string) $slot['hora_inicio'], 0, 5);
+                $horaFin = substr((string) $slot['hora_fin'], 0, 5);
+
+                if ($this->filtroHoraDesde && $horaInicio < $this->filtroHoraDesde) {
+                    return false;
+                }
+
+                if ($this->filtroHoraHasta && $horaFin > $this->filtroHoraHasta) {
+                    return false;
+                }
+
+                return true;
+            }
+        ));
+    }
+
+    public function limpiarFiltros(): void
+    {
+        $this->filtroProfesorId = null;
+        $this->filtroHoraDesde = null;
+        $this->filtroHoraHasta = null;
+        $this->resetValidation([
+            'filtroProfesorId',
+            'filtroHoraDesde',
+            'filtroHoraHasta',
+        ]);
+        $this->slots = array_values($this->slotsOriginales);
+    }
+
+    public function reservar(string $slotKey): void
     {
         $alumno = Auth::user();
+        $slot = collect($this->slots)->first(
+            fn (array $slot): bool => ($slot['slot_key'] ?? null) === $slotKey
+        );
 
-        if (! isset($this->slots[$index])) {
+        if (! $slot) {
             throw ValidationException::withMessages([
                 'slot' => 'Horario inválido.',
             ]);
         }
 
-        $slot = $this->slots[$index];
-
         DB::transaction(function () use ($slot, $alumno) {
+            $alumnoBloqueado = User::query()
+                ->whereKey($alumno->id)
+                ->where('role', 'alumno')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $alumnoBloqueado) {
+                throw ValidationException::withMessages([
+                    'slot' => 'No se pudo validar al alumno.',
+                ]);
+            }
+
             $profesorActivo = User::query()
                 ->whereKey($slot['profesor_id'])
                 ->where('role', 'profesor')
@@ -226,17 +336,42 @@ class SolicitarTurno extends Page
                 ]);
             }
 
-            $hayChoque = Turno::where('profesor_id', $slot['profesor_id'])
+            $estadosOcupados = [
+                Turno::ESTADO_PENDIENTE,
+                Turno::ESTADO_ACEPTADO,
+                Turno::ESTADO_PENDIENTE_PAGO,
+                Turno::ESTADO_CONFIRMADO,
+            ];
+
+            $hayChoqueAlumno = Turno::query()
+                ->where('alumno_id', $alumnoBloqueado->id)
                 ->whereDate('fecha', $slot['fecha'])
                 ->where(function ($q) use ($slot) {
                     $q->where('hora_inicio', '<', $slot['hora_fin'])
                         ->where('hora_fin', '>', $slot['hora_inicio']);
                 })
-                ->whereIn('estado', ['pendiente', 'aceptado', 'pendiente_pago', 'confirmado'])
+                ->whereIn('estado', $estadosOcupados)
                 ->lockForUpdate()
                 ->exists();
 
-            if ($hayChoque) {
+            if ($hayChoqueAlumno) {
+                throw ValidationException::withMessages([
+                    'slot' => 'Ya tenés otro turno en ese día y horario.',
+                ]);
+            }
+
+            $hayChoqueProfesor = Turno::query()
+                ->where('profesor_id', $profesorActivo->id)
+                ->whereDate('fecha', $slot['fecha'])
+                ->where(function ($q) use ($slot) {
+                    $q->where('hora_inicio', '<', $slot['hora_fin'])
+                        ->where('hora_fin', '>', $slot['hora_inicio']);
+                })
+                ->whereIn('estado', $estadosOcupados)
+                ->lockForUpdate()
+                ->exists();
+
+            if ($hayChoqueProfesor) {
                 throw ValidationException::withMessages([
                     'slot' => 'Ese horario ya no está disponible.',
                 ]);
@@ -268,6 +403,55 @@ class SolicitarTurno extends Page
     public function cerrarModalExito(): void
     {
         $this->mostrarModalExito = false;
+    }
+
+    private function limpiarFiltrosYResultados(): void
+    {
+        $this->filtroProfesorId = null;
+        $this->filtroHoraDesde = null;
+        $this->filtroHoraHasta = null;
+        $this->slotsOriginales = [];
+        $this->slots = [];
+        $this->profesoresDisponibles = [];
+        $this->resetValidation([
+            'filtroProfesorId',
+            'filtroHoraDesde',
+            'filtroHoraHasta',
+        ]);
+    }
+
+    private function agregarClavesDeSlot(array $slots): array
+    {
+        return array_values(array_map(function (array $slot): array {
+            $slot['slot_key'] = hash('sha256', implode('|', [
+                $slot['profesor_id'],
+                $slot['fecha'],
+                $slot['hora_inicio'],
+                $slot['hora_fin'],
+            ]));
+
+            return $slot;
+        }, $slots));
+    }
+
+    private function actualizarProfesoresDisponibles(): void
+    {
+        $profesores = [];
+
+        foreach ($this->slotsOriginales as $slot) {
+            $profesorId = (int) $slot['profesor_id'];
+            $profesores[$profesorId] = [
+                'id' => $profesorId,
+                'nombre' => $slot['profesor_nombre'] ?? 'Profesor',
+            ];
+        }
+
+        $this->profesoresDisponibles = array_values($profesores);
+
+        usort(
+            $this->profesoresDisponibles,
+            fn (array $a, array $b): int => strcasecmp($a['nombre'], $b['nombre'])
+        );
     }
 
     private function filtrarSlotsProfesoresActivos(array $slots): array
