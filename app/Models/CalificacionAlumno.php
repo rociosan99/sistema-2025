@@ -65,4 +65,14 @@ class CalificacionAlumno extends Model
     {
         return $this->belongsTo(User::class, 'alumno_id', 'id');
     }
+
+    public function motivos()
+    {
+        return $this->belongsToMany(
+            MotivoCalificacion::class,
+            'calificacion_alumno_motivo',
+            'calificacion_alumno_id',
+            'motivo_calificacion_id'
+        )->withTimestamps();
+    }
 }

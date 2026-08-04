@@ -2,14 +2,18 @@
 
 namespace App\Filament\Profesor\Pages;
 
-use App\Models\CalificacionAlumno;
+use App\Models\MotivoCalificacion;
 use App\Models\Turno;
+use App\Services\CalificacionAlumnoService;
 use Carbon\Carbon;
 use Filament\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Textarea;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
 
 class Dashboard extends Page
@@ -171,7 +175,7 @@ class Dashboard extends Page
             ->modalHeading('Calificar alumno')
             ->form([
                 Radio::make('estrellas')
-                    ->label('Tu calificación')
+                    ->label('1. Calificación')
                     ->options([
                         1 => '⭐',
                         2 => '⭐⭐',
@@ -187,44 +191,58 @@ class Dashboard extends Page
                         5 => 'Excelente',
                     ])
                     ->inline(false)
+                    ->live()
+                    ->afterStateUpdated(fn (Set $set) => $set('motivos', []))
                     ->required(),
+                CheckboxList::make('motivos')
+                    ->label('2. Motivos')
+                    ->options(function (Get $get): array {
+                        $estrellas = (int) $get('estrellas');
 
+                        if ($estrellas < 1 || $estrellas > 5) {
+                            return [];
+                        }
+
+                        return MotivoCalificacion::query()
+                            ->where('tipo_evaluado', MotivoCalificacion::TIPO_ALUMNO)
+                            ->where('estrellas', $estrellas)
+                            ->where('activo', true)
+                            ->orderBy('orden')
+                            ->orderBy('id')
+                            ->pluck('descripcion', 'id')
+                            ->toArray();
+                    })
+                    ->helperText(fn (Get $get): string => $get('estrellas')
+                        ? 'Seleccioná al menos un motivo. Podés elegir más de uno.'
+                        : 'Seleccioná una calificación para ver los motivos disponibles.')
+                    ->columns([
+                        'default' => 1,
+                        'md' => 2,
+                    ])
+                    ->minItems(1)
+                    ->required(),
                 Textarea::make('comentario')
-                    ->label('Comentario (opcional)')
-                    ->rows(4)
+                    ->label('3. Comentario')
+                    ->helperText('Compartí brevemente cómo fue el desempeño del alumno durante la clase.')
+                    ->placeholder('Escribí tu evaluación del alumno...')
+                    ->rows(5)
+                    ->required()
                     ->maxLength(1000),
             ])
-            ->action(function (array $data, array $arguments) {
+            ->action(function (
+                array $data,
+                array $arguments,
+                CalificacionAlumnoService $calificacionAlumnoService,
+            ) {
                 $turnoId = (int) ($arguments['turno_id'] ?? 0);
 
-                $turno = Turno::with(['calificacionAlumno'])
-                    ->where('profesor_id', Auth::id())
-                    ->findOrFail($turnoId);
-
-                $fin = Carbon::parse($turno->fecha->format('Y-m-d') . ' ' . $turno->hora_fin);
-
-                if ($turno->estado !== Turno::ESTADO_CONFIRMADO) {
-                    Notification::make()->title('Este turno no está confirmado/pagado.')->danger()->send();
-                    return;
-                }
-
-                if ($fin->isFuture()) {
-                    Notification::make()->title('Todavía no terminó la clase.')->warning()->send();
-                    return;
-                }
-
-                if ($turno->calificacionAlumno) {
-                    Notification::make()->title('Este turno ya fue calificado.')->warning()->send();
-                    return;
-                }
-
-                CalificacionAlumno::create([
-                    'turno_id' => $turno->id,
-                    'profesor_id' => Auth::id(),
-                    'alumno_id' => $turno->alumno_id,
-                    'estrellas' => (int) $data['estrellas'],
-                    'comentario' => $data['comentario'] ?? null,
-                ]);
+                $calificacionAlumnoService->calificar(
+                    profesorId: (int) Auth::id(),
+                    turnoId: $turnoId,
+                    estrellas: $data['estrellas'] ?? null,
+                    motivoIds: $data['motivos'] ?? [],
+                    comentario: $data['comentario'] ?? null,
+                );
 
                 Notification::make()->title('Calificación guardada.')->success()->send();
 

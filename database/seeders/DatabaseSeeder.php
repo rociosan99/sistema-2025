@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             DatosSistema::class,
             UbicacionesSeeder::class,
             MotivosCalificacionProfesorSeeder::class,
+            MotivosCalificacionAlumnoSeeder::class,
         ]);
     }
 }

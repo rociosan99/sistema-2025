@@ -35,4 +35,14 @@ class MotivoCalificacion extends Model
             'calificacion_profesor_id'
         )->withTimestamps();
     }
+
+    public function calificacionesAlumno()
+    {
+        return $this->belongsToMany(
+            CalificacionAlumno::class,
+            'calificacion_alumno_motivo',
+            'motivo_calificacion_id',
+            'calificacion_alumno_id'
+        )->withTimestamps();
+    }
 }
