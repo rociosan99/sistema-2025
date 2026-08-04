@@ -59,9 +59,32 @@ class SolicitudesDisponibilidad extends Page
 
    public function crearSolicitud(): void
     {
+        $carreraId = $this->carreraActivaId();
+
+        if (! $carreraId) {
+            throw ValidationException::withMessages([
+                'materiaId' => 'Configurá una carrera activa en tu perfil antes de crear una solicitud.',
+            ]);
+        }
+
         if (! $this->materiaId) {
             throw ValidationException::withMessages([
                 'materiaId' => 'Seleccioná una materia.'
+            ]);
+        }
+
+        if (! $this->materiaPerteneceACarrera($this->materiaId, $carreraId)) {
+            throw ValidationException::withMessages([
+                'materiaId' => 'La materia seleccionada no pertenece a tu carrera activa.',
+            ]);
+        }
+
+        if (
+            $this->temaId
+            && ! $this->temaPerteneceAMateriaYCarrera($this->temaId, $this->materiaId, $carreraId)
+        ) {
+            throw ValidationException::withMessages([
+                'temaId' => 'El tema seleccionado no corresponde a la materia y carrera activas.',
             ]);
         }
 
@@ -171,11 +194,81 @@ if ($fechaSeleccionada < $hoy) {
     // Helpers para selects
     public function getMateriasOptionsProperty(): array
     {
-        return Materia::orderBy('materia_nombre')->pluck('materia_nombre', 'materia_id')->toArray();
+        $carreraId = $this->carreraActivaId();
+
+        if (! $carreraId) {
+            return [];
+        }
+
+        return Materia::query()
+            ->join('programas', 'programas.programa_materia_id', '=', 'materias.materia_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
+            ->where('planes_estudio.plan_carrera_id', $carreraId)
+            ->select('materias.materia_id', 'materias.materia_nombre')
+            ->distinct()
+            ->orderBy('materias.materia_nombre')
+            ->pluck('materias.materia_nombre', 'materias.materia_id')
+            ->toArray();
     }
 
     public function getTemasOptionsProperty(): array
     {
-        return Tema::orderBy('tema_nombre')->pluck('tema_nombre', 'tema_id')->toArray();
+        $carreraId = $this->carreraActivaId();
+
+        if (! $carreraId || ! $this->materiaId) {
+            return [];
+        }
+
+        return Tema::query()
+            ->join('programa_tema', 'programa_tema.tema_id', '=', 'temas.tema_id')
+            ->join('programas', 'programas.programa_id', '=', 'programa_tema.programa_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
+            ->where('planes_estudio.plan_carrera_id', $carreraId)
+            ->where('programas.programa_materia_id', $this->materiaId)
+            ->select('temas.tema_id', 'temas.tema_nombre')
+            ->distinct()
+            ->orderBy('temas.tema_nombre')
+            ->pluck('temas.tema_nombre', 'temas.tema_id')
+            ->toArray();
+    }
+
+    public function getTieneCarreraActivaProperty(): bool
+    {
+        return $this->carreraActivaId() !== null;
+    }
+
+    public function updatedMateriaId(?int $materiaId): void
+    {
+        $this->temaId = null;
+        $this->resetValidation(['materiaId', 'temaId']);
+    }
+
+    private function carreraActivaId(): ?int
+    {
+        $carreraId = Auth::user()?->carrera_activa_id;
+
+        return $carreraId ? (int) $carreraId : null;
+    }
+
+    private function materiaPerteneceACarrera(int $materiaId, int $carreraId): bool
+    {
+        return Materia::query()
+            ->join('programas', 'programas.programa_materia_id', '=', 'materias.materia_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
+            ->where('materias.materia_id', $materiaId)
+            ->where('planes_estudio.plan_carrera_id', $carreraId)
+            ->exists();
+    }
+
+    private function temaPerteneceAMateriaYCarrera(int $temaId, int $materiaId, int $carreraId): bool
+    {
+        return Tema::query()
+            ->join('programa_tema', 'programa_tema.tema_id', '=', 'temas.tema_id')
+            ->join('programas', 'programas.programa_id', '=', 'programa_tema.programa_id')
+            ->join('planes_estudio', 'planes_estudio.plan_id', '=', 'programas.programa_plan_id')
+            ->where('temas.tema_id', $temaId)
+            ->where('programas.programa_materia_id', $materiaId)
+            ->where('planes_estudio.plan_carrera_id', $carreraId)
+            ->exists();
     }
 }

@@ -8,15 +8,24 @@
                 Si no hay profesores disponibles, dejá tu horario y materia. Cuando aparezca un match, se enviará una oferta a profesores compatibles.
             </p>
 
+            @if (! $this->tieneCarreraActiva)
+                <div style="margin-top:14px; padding:12px; border:1px solid #f59e0b; border-radius:12px; background:#fffbeb; color:#92400e; font-size:13px;">
+                    Configurá una carrera activa en Mi perfil para seleccionar una materia y crear una solicitud.
+                </div>
+            @endif
+
             <div style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px;">
 
                 <div>
                     <label style="font-size:12px; font-weight:900;">Materia</label>
 
                     <select wire:model.live="materiaId"
+                        @disabled(! $this->tieneCarreraActiva)
                         style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px;">
 
-                        <option value="">Seleccionar...</option>
+                        <option value="">
+                            {{ $this->tieneCarreraActiva ? 'Seleccionar...' : 'Sin carrera activa' }}
+                        </option>
 
                         @foreach($this->materiasOptions as $id => $name)
                             <option value="{{ $id }}">{{ $name }}</option>
@@ -34,16 +43,33 @@
                 <div>
                     <label style="font-size:12px; font-weight:900;">Tema (opcional)</label>
 
+                    @php($temasOptions = $this->temasOptions)
+
                     <select wire:model.live="temaId"
+                        @disabled(! $this->tieneCarreraActiva || ! $materiaId)
                         style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px;">
 
-                        <option value="">Sin tema</option>
+                        <option value="">
+                            {{ $materiaId ? 'Sin tema' : 'Seleccioná primero una materia' }}
+                        </option>
 
-                        @foreach($this->temasOptions as $id => $name)
+                        @foreach($temasOptions as $id => $name)
                             <option value="{{ $id }}">{{ $name }}</option>
                         @endforeach
 
                     </select>
+
+                    @if ($this->tieneCarreraActiva && $materiaId && empty($temasOptions))
+                        <div style="margin-top:8px; color:#6b7280; font-size:13px;">
+                            No hay temas disponibles para esta materia.
+                        </div>
+                    @endif
+
+                    @if ($errors->has('temaId'))
+                        <div style="margin-top:8px; color:#dc2626; font-size:13px;">
+                            {{ $errors->first('temaId') }}
+                        </div>
+                    @endif
                 </div>
 
                 <div>
@@ -52,6 +78,7 @@
                     <input
                         type="date"
                         wire:model.live="fecha"
+                        @disabled(! $this->tieneCarreraActiva)
                         style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px;">
 
                     @if ($errors->has('fecha'))
@@ -68,6 +95,7 @@
                         type="time"
                         step="3600"
                         wire:model.live="horaInicio"
+                        @disabled(! $this->tieneCarreraActiva)
                         style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px;">
                 </div>
 
@@ -78,6 +106,7 @@
                         type="time"
                         step="3600"
                         wire:model.live="horaFin"
+                        @disabled(! $this->tieneCarreraActiva)
                         style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px;">
 
                     @if ($errors->has('hora'))
@@ -93,13 +122,17 @@
                     <input
                         type="datetime-local"
                         wire:model.live="expiresAt"
+                        @disabled(! $this->tieneCarreraActiva)
                         style="width:100%; border:1px solid #d1d5db; border-radius:12px; padding:10px;">
                 </div>
 
             </div>
 
             <div style="margin-top:14px;">
-                <x-filament::button wire:click="crearSolicitud" icon="heroicon-o-plus">
+                <x-filament::button
+                    wire:click="crearSolicitud"
+                    icon="heroicon-o-plus"
+                    :disabled="! $this->tieneCarreraActiva">
                     Crear solicitud
                 </x-filament::button>
             </div>
