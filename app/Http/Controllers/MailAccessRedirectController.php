@@ -23,6 +23,22 @@ class MailAccessRedirectController extends Controller
         abort_unless(str_starts_with($targetPath, '/'), 403);
         abort_unless(! str_starts_with($targetPath, '//'), 403);
 
+        if ($panel === 'profesor') {
+            $profesorId = $request->integer('profesor');
+
+            abort_unless($profesorId > 0, 404);
+
+            $usuarioActual = Auth::user();
+
+            if (
+                $usuarioActual
+                && $usuarioActual->role === 'profesor'
+                && (int) $usuarioActual->id === $profesorId
+            ) {
+                return redirect($targetPath);
+            }
+        }
+
         foreach (['web', 'alumno', 'profesor', 'admin'] as $guard) {
             if (array_key_exists($guard, config('auth.guards', []))) {
                 Auth::guard($guard)->logout();

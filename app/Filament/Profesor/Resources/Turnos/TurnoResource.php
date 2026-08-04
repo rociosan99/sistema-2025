@@ -3,9 +3,12 @@
 namespace App\Filament\Profesor\Resources\Turnos;
 
 use App\Filament\Profesor\Resources\Turnos\Pages\ListTurnos;
+use App\Filament\Profesor\Resources\Turnos\Pages\ViewTurno;
+use App\Filament\Profesor\Resources\Turnos\Schemas\TurnoInfolist;
 use App\Filament\Profesor\Resources\Turnos\Tables\TurnosTable;
 use App\Models\Turno;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
@@ -74,10 +77,16 @@ class TurnoResource extends Resource
         return TurnosTable::configure($table);
     }
 
+    public static function infolist(Schema $schema): Schema
+    {
+        return TurnoInfolist::configure($schema);
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => ListTurnos::route('/'),
+            'view' => ViewTurno::route('/{record}'),
         ];
     }
 }

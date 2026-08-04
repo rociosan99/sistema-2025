@@ -3,11 +3,9 @@
 namespace App\Filament\Profesor\Resources\Turnos\Tables;
 
 use App\Mail\AlumnoClaseSuspendidaPorProfesor;
-use App\Mail\ProfesorRespondioTurno;
 use App\Models\Turno;
 use App\Services\AuditLogger;
-use Carbon\Carbon;
-use Carbon\CarbonInterface;
+use App\Services\TurnoRespuestaProfesorService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
@@ -67,7 +65,7 @@ class TurnosTable
                     ->formatStateUsing(function ($state, Turno $record) {
                         if (
                             in_array((string) $state, [Turno::ESTADO_PENDIENTE, Turno::ESTADO_PENDIENTE_PAGO], true)
-                            && self::estaVencido($record)
+                            && app(TurnoRespuestaProfesorService::class)->estaVencido($record)
                         ) {
                             return 'Vencido';
                         }
@@ -170,42 +168,15 @@ class TurnosTable
                             ->maxLength(2048),
                     ])
                     ->visible(fn (Turno $record) =>
-                        $record->estado === Turno::ESTADO_PENDIENTE &&
-                        ! self::estaVencido($record)
+                        app(TurnoRespuestaProfesorService::class)
+                            ->puedeResponder($record, (int) Auth::id())
                     )
                     ->action(function (Turno $record, array $data) {
-                        if (self::marcarComoVencidoSiCorresponde($record)) {
-                            return;
-                        }
-
-                        /** @var AuditLogger $audit */
-                        $audit = app(AuditLogger::class);
-
-                        $estadoAntes = (string) $record->estado;
-
-                        $record->update([
-                            'estado' => Turno::ESTADO_PENDIENTE_PAGO,
-                            'enlace_clase' => trim((string) $data['enlace_clase']),
-                        ]);
-
-                        $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
-
-                        $audit->log('turno.aceptado_profesor', $record, [
-                            'turno_id' => $record->id,
-                            'profesor_id' => $record->profesor_id,
-                            'alumno_id' => $record->alumno_id,
-                            'estado_anterior' => $estadoAntes,
-                            'estado_nuevo' => Turno::ESTADO_PENDIENTE_PAGO,
-                            'enlace_clase' => $record->enlace_clase,
-                            'fecha' => (string) $record->fecha,
-                            'hora_inicio' => (string) $record->hora_inicio,
-                            'hora_fin' => (string) $record->hora_fin,
-                        ]);
-
-                        $emailAlumno = $record->alumno?->email;
-                        if ($emailAlumno) {
-                            Mail::to($emailAlumno)->send(new ProfesorRespondioTurno($record));
-                        }
+                        app(TurnoRespuestaProfesorService::class)->aceptar(
+                            $record,
+                            (int) Auth::id(),
+                            (string) $data['enlace_clase'],
+                        );
                     }),
 
                 Action::make('editarEnlace')
@@ -259,7 +230,7 @@ class TurnosTable
                     ])
                     ->visible(fn (Turno $record) =>
                         $record->estado === Turno::ESTADO_CONFIRMADO &&
-                        ! self::estaVencido($record)
+                        ! app(TurnoRespuestaProfesorService::class)->estaVencido($record)
                     )
                     ->action(function (Turno $record, array $data) {
                         if ($record->estado !== Turno::ESTADO_CONFIRMADO) {
@@ -302,103 +273,17 @@ class TurnosTable
                     ->color('danger')
                     ->requiresConfirmation()
                     ->visible(fn (Turno $record) =>
-                        $record->estado === Turno::ESTADO_PENDIENTE &&
-                        ! self::estaVencido($record)
+                        app(TurnoRespuestaProfesorService::class)
+                            ->puedeResponder($record, (int) Auth::id())
                     )
                     ->action(function (Turno $record) {
-                        if (self::marcarComoVencidoSiCorresponde($record)) {
-                            return;
-                        }
-
-                        /** @var AuditLogger $audit */
-                        $audit = app(AuditLogger::class);
-
-                        $estadoAntes = (string) $record->estado;
-
-                        $record->update([
-                            'estado' => Turno::ESTADO_RECHAZADO,
-                        ]);
-
-                        $record->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
-
-                        $audit->log('turno.rechazado_profesor', $record, [
-                            'turno_id' => $record->id,
-                            'profesor_id' => $record->profesor_id,
-                            'alumno_id' => $record->alumno_id,
-                            'estado_anterior' => $estadoAntes,
-                            'estado_nuevo' => Turno::ESTADO_RECHAZADO,
-                            'fecha' => (string) $record->fecha,
-                            'hora_inicio' => (string) $record->hora_inicio,
-                            'hora_fin' => (string) $record->hora_fin,
-                        ]);
-
-                        $emailAlumno = $record->alumno?->email;
-                        if ($emailAlumno) {
-                            Mail::to($emailAlumno)->send(new ProfesorRespondioTurno($record));
-                        }
+                        app(TurnoRespuestaProfesorService::class)->rechazar(
+                            $record,
+                            (int) Auth::id(),
+                        );
                     }),
             ])
             ->paginated();
     }
 
-    protected static function estaVencido(Turno $turno): bool
-    {
-        if (in_array((string) $turno->estado, [
-            Turno::ESTADO_CONFIRMADO,
-            Turno::ESTADO_CANCELADO,
-            Turno::ESTADO_RECHAZADO,
-            Turno::ESTADO_VENCIDO,
-        ], true)) {
-            return false;
-        }
-
-        $fecha = $turno->fecha instanceof CarbonInterface
-            ? $turno->fecha->copy()
-            : Carbon::parse($turno->fecha);
-
-        $horaInicioStr = (string) $turno->hora_inicio;
-
-        if (preg_match('/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/', $horaInicioStr)) {
-            $horaInicioStr = Carbon::parse($horaInicioStr)->format('H:i:s');
-        }
-
-        if (preg_match('/^\d{2}:\d{2}$/', $horaInicioStr)) {
-            $horaInicioStr .= ':00';
-        }
-
-        $inicioTurno = $fecha->copy()->setTimeFromTimeString($horaInicioStr);
-
-        return now()->gte($inicioTurno);
-    }
-
-    protected static function marcarComoVencidoSiCorresponde(Turno $turno): bool
-    {
-        if (
-            $turno->estado === Turno::ESTADO_PENDIENTE &&
-            self::estaVencido($turno)
-        ) {
-            /** @var AuditLogger $audit */
-            $audit = app(AuditLogger::class);
-
-            $estadoAntes = (string) $turno->estado;
-
-            $turno->update([
-                'estado' => Turno::ESTADO_VENCIDO,
-            ]);
-
-            $audit->log('turno.vencido', $turno, [
-                'turno_id' => $turno->id,
-                'motivo' => 'respuesta_profesor_fuera_de_hora',
-                'estado_anterior' => $estadoAntes,
-                'estado_nuevo' => Turno::ESTADO_VENCIDO,
-                'fecha' => (string) $turno->fecha,
-                'hora_inicio' => (string) $turno->hora_inicio,
-                'hora_fin' => (string) $turno->hora_fin,
-            ]);
-
-            return true;
-        }
-
-        return false;
-    }
 }
