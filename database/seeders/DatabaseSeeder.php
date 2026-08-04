@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             DatosSistema::class,
             UbicacionesSeeder::class,
+            MotivosCalificacionProfesorSeeder::class,
         ]);
     }
 }
