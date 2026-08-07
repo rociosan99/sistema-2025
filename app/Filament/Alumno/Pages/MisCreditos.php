@@ -22,7 +22,7 @@ class MisCreditos extends Page
 
     public string $saldoDisponible = '0.00';
 
-    /** @var array<int, array<string, int|string>> */
+    /** @var array<int, array<string, int|string|null>> */
     public array $historial = [];
 
     public function mount(CreditoService $creditoService): void
@@ -49,17 +49,36 @@ class MisCreditos extends Page
                 'importe_pagado' => $credito->importe_pagado,
                 'importe_credito' => $credito->importe_credito,
                 'importe_penalizacion' => $credito->importe_penalizacion,
-                'estado' => $credito->estado,
-                'estado_label' => match ($credito->estado) {
-                    Credito::ESTADO_ESPERANDO_PAGO => 'Esperando pago',
-                    Credito::ESTADO_DISPONIBLE => 'Disponible',
-                    Credito::ESTADO_NO_APLICA => 'No aplica',
-                    default => ucfirst(str_replace('_', ' ', $credito->estado)),
-                },
+                'vence_at' => $credito->vence_at?->format('d/m/Y H:i'),
+                'estado_visual' => $this->estadoVisual($credito),
+                'estado_label' => $this->estadoLabel($credito),
                 'porcentaje_credito' => $credito->porcentaje_credito_aplicado,
                 'porcentaje_penalizacion' => $credito->porcentaje_penalizacion_aplicado,
                 'horas_limite' => $credito->horas_limite_aplicadas,
             ])
             ->all();
+    }
+
+    private function estadoVisual(Credito $credito): string
+    {
+        return match (true) {
+            $credito->estado === Credito::ESTADO_ESPERANDO_PAGO => 'esperando_pago',
+            $credito->estado === Credito::ESTADO_NO_APLICA => 'no_aplica',
+            $credito->estado === Credito::ESTADO_DISPONIBLE && $credito->vence_at === null => 'sin_vencimiento',
+            $credito->estado === Credito::ESTADO_DISPONIBLE && $credito->vence_at->isPast() => 'vencido',
+            $credito->estado === Credito::ESTADO_DISPONIBLE => 'disponible',
+            default => 'no_aplica',
+        };
+    }
+
+    private function estadoLabel(Credito $credito): string
+    {
+        return match ($this->estadoVisual($credito)) {
+            'esperando_pago' => 'Esperando pago',
+            'disponible' => 'Disponible',
+            'vencido' => 'Vencido',
+            'sin_vencimiento' => 'Sin vencimiento',
+            default => 'No corresponde',
+        };
     }
 }

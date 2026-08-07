@@ -27,6 +27,7 @@
                                 <th style="padding:11px; border-bottom:1px solid #e5e7eb; text-align:right;">Pagado</th>
                                 <th style="padding:11px; border-bottom:1px solid #e5e7eb; text-align:right;">Acreditado</th>
                                 <th style="padding:11px; border-bottom:1px solid #e5e7eb; text-align:right;">Penalización</th>
+                                <th style="padding:11px; border-bottom:1px solid #e5e7eb;">Vencimiento</th>
                                 <th style="padding:11px; border-bottom:1px solid #e5e7eb;">Estado</th>
                                 <th style="padding:11px; border-bottom:1px solid #e5e7eb;">Regla aplicada</th>
                             </tr>
@@ -52,15 +53,18 @@
                                     <td style="padding:12px 11px; border-bottom:1px solid #f1f5f9; text-align:right; color:#991b1b;">
                                         ${{ number_format((float) $credito['importe_penalizacion'], 2, ',', '.') }}
                                     </td>
+                                    <td style="padding:12px 11px; border-bottom:1px solid #f1f5f9; color:#334155;">
+                                        {{ $credito['vence_at'] ?? 'Sin vencimiento' }}
+                                    </td>
                                     <td style="padding:12px 11px; border-bottom:1px solid #f1f5f9;">
-                                        <span style="display:inline-flex; padding:5px 9px; border-radius:9999px; background:{{ $credito['estado'] === 'disponible' ? '#dcfce7' : ($credito['estado'] === 'esperando_pago' ? '#fef3c7' : '#f1f5f9') }}; color:{{ $credito['estado'] === 'disponible' ? '#166534' : ($credito['estado'] === 'esperando_pago' ? '#92400e' : '#475569') }}; font-weight:800;">
+                                        <span style="display:inline-flex; padding:5px 9px; border-radius:9999px; background:{{ $credito['estado_visual'] === 'disponible' ? '#dcfce7' : ($credito['estado_visual'] === 'esperando_pago' ? '#fef3c7' : ($credito['estado_visual'] === 'vencido' ? '#fee2e2' : '#f1f5f9')) }}; color:{{ $credito['estado_visual'] === 'disponible' ? '#166534' : ($credito['estado_visual'] === 'esperando_pago' ? '#92400e' : ($credito['estado_visual'] === 'vencido' ? '#991b1b' : '#475569')) }}; font-weight:800;">
                                             {{ $credito['estado_label'] }}
                                         </span>
                                     </td>
                                     <td style="padding:12px 11px; border-bottom:1px solid #f1f5f9; color:#475569;">
                                         <div>Crédito: {{ number_format((float) $credito['porcentaje_credito'], 2, ',', '.') }}%</div>
                                         <div>Penalización: {{ number_format((float) $credito['porcentaje_penalizacion'], 2, ',', '.') }}%</div>
-                                        <div>Límite: {{ $credito['horas_limite'] }} h</div>
+                                        <div>Límite sin penalización: {{ $credito['horas_limite'] }} h</div>
                                     </td>
                                 </tr>
                             @endforeach

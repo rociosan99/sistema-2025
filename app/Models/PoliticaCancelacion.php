@@ -16,6 +16,7 @@ class PoliticaCancelacion extends Model
         'porcentaje_credito_anticipado',
         'porcentaje_credito_tardio',
         'porcentaje_penalizacion_tardia',
+        'vigencia_creditos_dias',
     ];
 
     protected $casts = [
@@ -23,5 +24,6 @@ class PoliticaCancelacion extends Model
         'porcentaje_credito_anticipado' => 'decimal:2',
         'porcentaje_credito_tardio' => 'decimal:2',
         'porcentaje_penalizacion_tardia' => 'decimal:2',
+        'vigencia_creditos_dias' => 'integer',
     ];
 }

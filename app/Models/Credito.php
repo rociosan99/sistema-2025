@@ -26,9 +26,11 @@ class Credito extends Model
         'porcentaje_credito_aplicado',
         'porcentaje_penalizacion_aplicado',
         'horas_limite_aplicadas',
+        'vigencia_dias_aplicada',
         'estado',
         'idempotency_key',
         'cancelado_at',
+        'vence_at',
     ];
 
     protected $casts = [
@@ -39,7 +41,9 @@ class Credito extends Model
         'porcentaje_credito_aplicado' => 'decimal:2',
         'porcentaje_penalizacion_aplicado' => 'decimal:2',
         'horas_limite_aplicadas' => 'integer',
+        'vigencia_dias_aplicada' => 'integer',
         'cancelado_at' => 'datetime',
+        'vence_at' => 'datetime',
     ];
 
     public function alumno(): BelongsTo

@@ -9,14 +9,19 @@ class PoliticaCancelacionSeeder extends Seeder
 {
     public function run(): void
     {
-        PoliticaCancelacion::query()->firstOrCreate(
+        $politica = PoliticaCancelacion::query()->firstOrCreate(
             ['codigo' => PoliticaCancelacion::CODIGO_CANCELACION_ALUMNO],
             [
                 'horas_cancelacion_sin_penalizacion' => 24,
                 'porcentaje_credito_anticipado' => 100,
                 'porcentaje_credito_tardio' => 75,
                 'porcentaje_penalizacion_tardia' => 25,
+                'vigencia_creditos_dias' => 90,
             ],
         );
+
+        if ($politica->vigencia_creditos_dias === null) {
+            $politica->update(['vigencia_creditos_dias' => 90]);
+        }
     }
 }

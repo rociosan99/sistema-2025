@@ -31,8 +31,9 @@ class CreditoService
         $creditoAnticipado = (float) $politica->porcentaje_credito_anticipado;
         $creditoTardio = (float) $politica->porcentaje_credito_tardio;
         $penalizacionTardia = (float) $politica->porcentaje_penalizacion_tardia;
+        $vigenciaDias = $politica->vigencia_creditos_dias;
 
-        if ($horas < 0) {
+        if ($horas < 0 || $vigenciaDias === null || $vigenciaDias < 1) {
             $this->politicaInvalida();
         }
 
@@ -92,6 +93,11 @@ class CreditoService
             ? $this->calcularImportes($pago, $porcentajeCredito)
             : $this->importesEnCero();
 
+        $vigenciaDias = (int) $politica->vigencia_creditos_dias;
+        $venceAt = $estado === Credito::ESTADO_DISPONIBLE
+            ? now()->addDays($vigenciaDias)
+            : null;
+
         return Credito::create([
             'alumno_id' => $turno->alumno_id,
             'turno_id' => $turno->id,
@@ -100,9 +106,11 @@ class CreditoService
             'porcentaje_credito_aplicado' => $porcentajeCredito,
             'porcentaje_penalizacion_aplicado' => $porcentajePenalizacion,
             'horas_limite_aplicadas' => $politica->horas_cancelacion_sin_penalizacion,
+            'vigencia_dias_aplicada' => $vigenciaDias,
             'estado' => $estado,
             'idempotency_key' => "credito-cancelacion-alumno:{$turno->id}",
             'cancelado_at' => $turno->cancelado_at ?? now(),
+            'vence_at' => $venceAt,
         ]);
     }
 
@@ -136,6 +144,12 @@ class CreditoService
                 ]);
             }
 
+            if ($credito->vigencia_dias_aplicada === null || $credito->vigencia_dias_aplicada < 1) {
+                throw ValidationException::withMessages([
+                    'credito' => 'El crÃ©dito pendiente no tiene una vigencia vÃ¡lida.',
+                ]);
+            }
+
             $credito->update([
                 'pago_id' => $pagoBloqueado->pago_id,
                 ...$this->calcularImportes(
@@ -143,6 +157,7 @@ class CreditoService
                     (float) $credito->porcentaje_credito_aplicado,
                 ),
                 'estado' => Credito::ESTADO_DISPONIBLE,
+                'vence_at' => now()->addDays($credito->vigencia_dias_aplicada),
             ]);
 
             return $credito->fresh();
@@ -155,6 +170,10 @@ class CreditoService
             (float) Credito::query()
                 ->where('alumno_id', $alumnoId)
                 ->where('estado', Credito::ESTADO_DISPONIBLE)
+                ->where(function ($query) {
+                    $query->whereNull('vence_at')
+                        ->orWhere('vence_at', '>', now());
+                })
                 ->sum('saldo_disponible'),
             2,
             '.',
