@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Pago;
 use App\Models\Turno;
 use App\Services\AuditLogger;
+use App\Services\CreditoService;
 use App\Services\MercadoPagoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -38,7 +39,7 @@ class MercadoPagoController extends Controller
                 ]);
 
                 return view('turnos.confirmacion-resultado', [
-                    'titulo'  => 'Ya está pagado',
+                    'titulo' => 'Ya está pagado',
                     'mensaje' => 'Este turno ya figura como Clase pagada.',
                 ]);
             }
@@ -60,7 +61,7 @@ class MercadoPagoController extends Controller
                 ]);
 
                 return view('turnos.confirmacion-resultado', [
-                    'titulo'  => 'Ya está pagado',
+                    'titulo' => 'Ya está pagado',
                     'mensaje' => 'Ya registramos un pago aprobado para este turno.',
                 ]);
             }
@@ -123,7 +124,7 @@ class MercadoPagoController extends Controller
 
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
                 return view('turnos.confirmacion-resultado', [
-                    'titulo'  => 'No disponible',
+                    'titulo' => 'No disponible',
                     'mensaje' => 'Este turno está cancelado.',
                 ]);
             }
@@ -134,7 +135,7 @@ class MercadoPagoController extends Controller
                 ]);
 
                 return view('turnos.confirmacion-resultado', [
-                    'titulo'  => 'Ya está pagado',
+                    'titulo' => 'Ya está pagado',
                     'mensaje' => 'Este turno ya figura como Clase pagada.',
                 ]);
             }
@@ -156,7 +157,7 @@ class MercadoPagoController extends Controller
                 ]);
 
                 return view('turnos.confirmacion-resultado', [
-                    'titulo'  => 'Ya está pagado',
+                    'titulo' => 'Ya está pagado',
                     'mensaje' => 'Ya registramos un pago aprobado para este turno.',
                 ]);
             }
@@ -168,7 +169,7 @@ class MercadoPagoController extends Controller
                 ]);
 
                 return view('turnos.confirmacion-resultado', [
-                    'titulo'  => 'No disponible',
+                    'titulo' => 'No disponible',
                     'mensaje' => 'Este turno no está pendiente de pago.',
                 ]);
             }
@@ -217,7 +218,7 @@ class MercadoPagoController extends Controller
         }
 
         return view('turnos.confirmacion-resultado', [
-            'titulo'  => 'Pago fallido o cancelado',
+            'titulo' => 'Pago fallido o cancelado',
             'mensaje' => 'El pago fue cancelado o rechazado. Podés intentar de nuevo desde tu panel.',
         ]);
     }
@@ -231,7 +232,7 @@ class MercadoPagoController extends Controller
         }
 
         return view('turnos.confirmacion-resultado', [
-            'titulo'  => 'Pago pendiente',
+            'titulo' => 'Pago pendiente',
             'mensaje' => 'El pago quedó pendiente. Cuando se apruebe, se actualizará automáticamente.',
         ]);
     }
@@ -263,7 +264,7 @@ class MercadoPagoController extends Controller
         try {
             MercadoPagoConfig::setAccessToken(config('services.mercadopago.access_token'));
 
-            $paymentClient = new PaymentClient();
+            $paymentClient = new PaymentClient;
             $payment = $paymentClient->get((int) $paymentId);
 
             $externalRef = (string) ($payment->external_reference ?? '');
@@ -325,7 +326,7 @@ class MercadoPagoController extends Controller
         try {
             MercadoPagoConfig::setAccessToken(config('services.mercadopago.access_token'));
 
-            $paymentClient = new PaymentClient();
+            $paymentClient = new PaymentClient;
             $payment = $paymentClient->get((int) $paymentId);
 
             return DB::transaction(function () use ($payment, $turno) {
@@ -339,24 +340,24 @@ class MercadoPagoController extends Controller
         } catch (MPApiException $e) {
             Log::error('MPApiException al consultar pago', [
                 'payment_id' => $paymentId,
-                'turno_id'   => $turno->id,
-                'status'     => $e->getApiResponse()?->getStatusCode(),
-                'content'    => $e->getApiResponse()?->getContent(),
+                'turno_id' => $turno->id,
+                'status' => $e->getApiResponse()?->getStatusCode(),
+                'content' => $e->getApiResponse()?->getContent(),
             ]);
 
             return [
-                'titulo'  => 'No pudimos verificar el pago',
+                'titulo' => 'No pudimos verificar el pago',
                 'mensaje' => 'Ocurrió un error consultando Mercado Pago. Volvé a intentar en unos minutos.',
             ];
         } catch (\Throwable $e) {
             Log::error('Error general al procesar pago', [
                 'payment_id' => $paymentId,
-                'turno_id'   => $turno->id,
-                'error'      => $e->getMessage(),
+                'turno_id' => $turno->id,
+                'error' => $e->getMessage(),
             ]);
 
             return [
-                'titulo'  => 'Error',
+                'titulo' => 'Error',
                 'mensaje' => 'Ocurrió un error inesperado. Revisá logs.',
             ];
         }
@@ -368,16 +369,16 @@ class MercadoPagoController extends Controller
      */
     private function procesarPagoDesdeObjetoMP(object $payment, Turno $turno, ?AuditLogger $audit): array
     {
-        $paymentId    = (string) ($payment->id ?? '');
-        $status       = (string) ($payment->status ?? '');
+        $paymentId = (string) ($payment->id ?? '');
+        $status = (string) ($payment->status ?? '');
         $statusDetail = (string) ($payment->status_detail ?? '');
-        $externalRef  = (string) ($payment->external_reference ?? '');
+        $externalRef = (string) ($payment->external_reference ?? '');
 
         if ($externalRef !== "turno:{$turno->id}") {
             Log::warning('Pago external_reference no coincide', [
-                'turno_id'           => $turno->id,
+                'turno_id' => $turno->id,
                 'external_reference' => $externalRef,
-                'payment_id'         => $paymentId,
+                'payment_id' => $paymentId,
             ]);
 
             if ($audit) {
@@ -389,9 +390,9 @@ class MercadoPagoController extends Controller
             }
 
             return [
-                'titulo'  => 'Pago inválido',
+                'titulo' => 'Pago inválido',
                 'mensaje' => 'El pago no corresponde a este turno.',
-                'status'  => 'invalid',
+                'status' => 'invalid',
             ];
         }
 
@@ -421,6 +422,10 @@ class MercadoPagoController extends Controller
                 }
             }
 
+            if ($turno->estado === Turno::ESTADO_CANCELADO) {
+                app(CreditoService::class)->completarPorPagoAprobado($pagoExistente);
+            }
+
             if (
                 $turno->estado !== Turno::ESTADO_CANCELADO &&
                 $turno->estado !== Turno::ESTADO_CONFIRMADO
@@ -429,31 +434,31 @@ class MercadoPagoController extends Controller
             }
 
             return [
-                'titulo'  => 'Pago aprobado',
+                'titulo' => 'Pago aprobado',
                 'mensaje' => 'El pago ya había sido procesado para este turno.',
-                'status'  => 'approved',
+                'status' => 'approved',
             ];
         }
 
         $detalle = json_decode(json_encode($payment), true);
 
         $payloadPago = [
-            'turno_id'            => $turno->id,
-            'monto'               => $turno->precio_total,
-            'moneda'              => config('services.mercadopago.currency', 'ARS'),
-            'provider'            => 'mercadopago',
-            'mp_payment_id'       => $paymentId,
-            'mp_status'           => $status,
-            'mp_status_detail'    => $statusDetail,
-            'mp_payment_type'     => (string) ($payment->payment_type_id ?? ''),
-            'mp_payment_method'   => (string) ($payment->payment_method_id ?? ''),
-            'detalle_externo'     => $detalle,
-            'external_reference'  => $externalRef,
-            'fecha_aprobado'      => $status === 'approved' ? Carbon::now() : null,
-            'estado'              => match ($status) {
+            'turno_id' => $turno->id,
+            'monto' => $turno->precio_total,
+            'moneda' => config('services.mercadopago.currency', 'ARS'),
+            'provider' => 'mercadopago',
+            'mp_payment_id' => $paymentId,
+            'mp_status' => $status,
+            'mp_status_detail' => $statusDetail,
+            'mp_payment_type' => (string) ($payment->payment_type_id ?? ''),
+            'mp_payment_method' => (string) ($payment->payment_method_id ?? ''),
+            'detalle_externo' => $detalle,
+            'external_reference' => $externalRef,
+            'fecha_aprobado' => $status === 'approved' ? Carbon::now() : null,
+            'estado' => match ($status) {
                 'approved' => Pago::ESTADO_APROBADO,
                 'rejected' => Pago::ESTADO_RECHAZADO,
-                default    => Pago::ESTADO_PENDIENTE,
+                default => Pago::ESTADO_PENDIENTE,
             },
         ];
 
@@ -478,6 +483,8 @@ class MercadoPagoController extends Controller
 
         if ($status === 'approved') {
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
+                app(CreditoService::class)->completarPorPagoAprobado($pago);
+
                 if ($audit) {
                     $audit->log('pago.aprobado_turno_cancelado_no_se_confirma', $turno, [
                         'turno_id' => $turno->id,
@@ -489,9 +496,9 @@ class MercadoPagoController extends Controller
                 }
 
                 return [
-                    'titulo'  => 'Pago aprobado',
+                    'titulo' => 'Pago aprobado',
                     'mensaje' => 'El pago se aprobó, pero el turno ya estaba cancelado. El estado del turno no se modificó.',
-                    'status'  => 'approved',
+                    'status' => 'approved',
                 ];
             }
 
@@ -511,9 +518,9 @@ class MercadoPagoController extends Controller
             }
 
             return [
-                'titulo'  => 'Pago aprobado',
+                'titulo' => 'Pago aprobado',
                 'mensaje' => '¡Listo! Se aprobó el pago y el turno quedó como Clase pagada.',
-                'status'  => 'approved',
+                'status' => 'approved',
             ];
         }
 
@@ -523,20 +530,20 @@ class MercadoPagoController extends Controller
             Turno::ESTADO_CONFIRMADO,
         ], true)) {
             return [
-                'titulo'  => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
+                'titulo' => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
                 'mensaje' => $status === 'rejected'
                     ? 'El pago fue rechazado, pero el turno ya tiene un estado final y no se modificó.'
                     : 'El pago quedó pendiente, pero el turno ya tiene un estado final y no se modificó.',
-                'status'  => $status ?: 'pending',
+                'status' => $status ?: 'pending',
             ];
         }
 
         return [
-            'titulo'  => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
+            'titulo' => $status === 'rejected' ? 'Pago rechazado' : 'Pago pendiente',
             'mensaje' => $status === 'rejected'
                 ? 'Mercado Pago rechazó el pago. Podés intentar nuevamente desde tu panel.'
                 : 'El pago quedó pendiente. Cuando se acredite, lo actualizaremos.',
-            'status'  => $status ?: 'pending',
+            'status' => $status ?: 'pending',
         ];
     }
 

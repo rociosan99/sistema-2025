@@ -84,6 +84,11 @@ class Pago extends Model
         return $this->belongsTo(Turno::class, 'turno_id', 'id');
     }
 
+    public function credito()
+    {
+        return $this->hasOne(Credito::class, 'pago_id', 'pago_id');
+    }
+
     public function estaAprobado(): bool
     {
         return $this->estado === self::ESTADO_APROBADO;

@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             UbicacionesSeeder::class,
             MotivosCalificacionProfesorSeeder::class,
             MotivosCalificacionAlumnoSeeder::class,
+            PoliticaCancelacionSeeder::class,
         ]);
     }
 }
