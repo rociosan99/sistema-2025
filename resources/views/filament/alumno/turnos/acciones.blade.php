@@ -127,16 +127,59 @@
     @endif
 
     @if($puedeCancelar)
-        <form method="POST"
-              action="{{ route('turnos.cancelar-panel', ['turno' => $record->id]) }}"
-              onsubmit="return confirm('¿Seguro que querés cancelar esta clase?');"
-              style="margin:0;">
-            @csrf
-            <button type="submit"
-                    style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; background:#ef4444; color:#fff; font-size:12px; font-weight:700; border:none; cursor:pointer;">
-                ❌ Cancelar clase
-            </button>
-        </form>
+        <x-filament::modal id="cancelar-turno-{{ $record->id }}" width="xl">
+            <x-slot name="trigger">
+                <button type="button"
+                        style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; background:#ef4444; color:#fff; font-size:12px; font-weight:700; border:none; cursor:pointer;">
+                    ❌ Cancelar clase
+                </button>
+            </x-slot>
+
+            <x-slot name="heading">
+                Términos y condiciones de cancelación
+            </x-slot>
+
+            <form method="POST"
+                  action="{{ route('turnos.cancelar-panel', ['turno' => $record->id]) }}"
+                  x-data="{ aceptado: false }"
+                  style="display:flex; width:100%; min-width:0; flex-direction:column; gap:18px; overflow-wrap:anywhere; white-space:normal;">
+                @csrf
+
+                <div style="display:flex; min-width:0; flex-direction:column; gap:10px; color:#475569; font-size:14px; line-height:1.6; white-space:normal;">
+                    <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                        Al cancelar esta clase se aplicará la política de cancelación vigente. Según la anticipación y el estado del pago, la operación podrá generar crédito y una penalización.
+                    </p>
+                    <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                        La cancelación no puede deshacerse desde esta pantalla.
+                    </p>
+                </div>
+
+                <label style="display:flex; width:100%; min-width:0; align-items:flex-start; gap:10px; color:#111827; font-size:14px; font-weight:600; cursor:pointer; white-space:normal;">
+                    <input type="checkbox"
+                           name="acepta_terminos"
+                           value="1"
+                           required
+                           x-model="aceptado"
+                           style="width:16px; height:16px; margin-top:2px; flex-shrink:0;">
+                    <span style="min-width:0; flex:1; white-space:normal; overflow-wrap:anywhere;">He leído y acepto los términos y condiciones de cancelación.</span>
+                </label>
+
+                <div style="display:flex; width:100%; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:10px; white-space:normal;">
+                    <button type="button"
+                            x-on:click="$dispatch('close-modal', { id: 'cancelar-turno-{{ $record->id }}' })"
+                            style="display:inline-flex; align-items:center; justify-content:center; padding:8px 14px; border-radius:10px; background:#f1f5f9; color:#475569; font-size:13px; font-weight:700; border:1px solid #cbd5e1; cursor:pointer;">
+                        Volver
+                    </button>
+
+                    <button type="submit"
+                            x-bind:disabled="! aceptado"
+                            x-bind:style="! aceptado ? 'opacity:0.5; cursor:not-allowed;' : 'opacity:1; cursor:pointer;'"
+                            style="display:inline-flex; align-items:center; justify-content:center; padding:8px 14px; border-radius:10px; background:#dc2626; color:#fff; font-size:13px; font-weight:800; border:none;">
+                        Confirmar cancelación
+                    </button>
+                </div>
+            </form>
+        </x-filament::modal>
     @endif
 
     @if($puedeVerEnlace)

@@ -20,6 +20,10 @@ class TurnoCancelarPanelController extends Controller
         AuditLogger $audit,
         CreditoService $creditoService,
     ) {
+        $request->validate([
+            'acepta_terminos' => ['accepted'],
+        ]);
+
         $alumnoAutenticadoId = (int) Auth::id();
 
         if ((int) $turno->alumno_id !== $alumnoAutenticadoId) {
