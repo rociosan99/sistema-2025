@@ -90,6 +90,7 @@
                     <thead>
                         <tr style="background:#f9fafb;">
                             <th>Alumno</th>
+                            <th>Calificación</th>
                             <th>Materia</th>
                             <th>Tema</th>
                             <th>Fecha</th>
@@ -104,6 +105,14 @@
                             <tr>
 
                                 <td>{{ $o['alumno'] }}</td>
+                                <td>
+                                    @if($o['calificaciones_cantidad'] > 0)
+                                        {{ number_format((float) $o['calificacion_promedio'], 1, ',', '.') }} ★
+                                        ({{ $o['calificaciones_cantidad'] }} {{ $o['calificaciones_cantidad'] === 1 ? 'calificación' : 'calificaciones' }})
+                                    @else
+                                        Sin calificaciones
+                                    @endif
+                                </td>
                                 <td>{{ $o['materia'] }}</td>
                                 <td>{{ $o['tema'] }}</td>
                                 <td>{{ $o['fecha'] }}</td>

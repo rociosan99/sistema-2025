@@ -45,6 +45,7 @@
     $enlaceClase = trim((string) ($record->enlace_clase ?? ''));
 
     $estaCancelado = $estado === Turno::ESTADO_CANCELADO;
+    $estaReprogramado = $estaCancelado && !empty($record->reprogramado_por_turno_id);
     $estaRechazado = $estado === Turno::ESTADO_RECHAZADO;
     $estaConfirmado = $estado === Turno::ESTADO_CONFIRMADO;
     $estaSuspendidoProfesor = $estado === Turno::ESTADO_SUSPENDIDO_PROFESOR;
@@ -87,7 +88,9 @@
 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
 
     @if($estaCancelado)
-        <span style="font-size:12px; font-weight:800; color:#991b1b;">❌ Cancelaste esta clase</span>
+        <span style="font-size:12px; font-weight:800; color:#991b1b;">
+            {{ $estaReprogramado ? '🔄 Reprogramado' : '❌ Suspendida por el alumno' }}
+        </span>
 
     @elseif($estaRechazado)
         <span style="font-size:12px; font-weight:800; color:#991b1b;">❌ Solicitud rechazada</span>
@@ -131,12 +134,12 @@
             <x-slot name="trigger">
                 <button type="button"
                         style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; background:#ef4444; color:#fff; font-size:12px; font-weight:700; border:none; cursor:pointer;">
-                    ❌ Cancelar clase
+                    ❌ Suspender clase
                 </button>
             </x-slot>
 
             <x-slot name="heading">
-                Términos y condiciones de cancelación
+                Términos y condiciones de suspensión
             </x-slot>
 
             <form method="POST"
@@ -145,24 +148,47 @@
                   style="display:flex; width:100%; min-width:0; flex-direction:column; gap:18px; overflow-wrap:anywhere; white-space:normal;">
                 @csrf
 
-                <div style="display:flex; min-width:0; flex-direction:column; gap:10px; color:#475569; font-size:14px; line-height:1.6; white-space:normal;">
-                    <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
-                        Al cancelar esta clase se aplicará la política de cancelación vigente. Según la anticipación y el estado del pago, la operación podrá generar crédito y una penalización.
-                    </p>
-                    <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
-                        La cancelación no puede deshacerse desde esta pantalla.
-                    </p>
-                </div>
+                @if($politicaCancelacion)
+                    @php
+                        $formatearPorcentaje = static fn ($valor) => rtrim(
+                            rtrim(number_format((float) $valor, 2, ',', '.'), '0'),
+                            ','
+                        );
+                    @endphp
 
-                <label style="display:flex; width:100%; min-width:0; align-items:flex-start; gap:10px; color:#111827; font-size:14px; font-weight:600; cursor:pointer; white-space:normal;">
-                    <input type="checkbox"
-                           name="acepta_terminos"
-                           value="1"
-                           required
-                           x-model="aceptado"
-                           style="width:16px; height:16px; margin-top:2px; flex-shrink:0;">
-                    <span style="min-width:0; flex:1; white-space:normal; overflow-wrap:anywhere;">He leído y acepto los términos y condiciones de cancelación.</span>
-                </label>
+                    <input type="hidden"
+                           name="politica_version"
+                           value="{{ $politicaCancelacion['version'] }}">
+
+                    <div style="display:flex; min-width:0; flex-direction:column; gap:10px; color:#475569; font-size:14px; line-height:1.6; white-space:normal;">
+                        <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                            Si suspendés con <strong>{{ $politicaCancelacion['horas_sin_penalizacion'] }} horas o más</strong> de anticipación, se acreditará el <strong>{{ $formatearPorcentaje($politicaCancelacion['porcentaje_credito_anticipado']) }}%</strong> del importe pagado.
+                        </p>
+                        <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                            Si suspendés con menos de <strong>{{ $politicaCancelacion['horas_sin_penalizacion'] }} horas</strong>, se acreditará el <strong>{{ $formatearPorcentaje($politicaCancelacion['porcentaje_credito_tardio']) }}%</strong> y se aplicará una penalización del <strong>{{ $formatearPorcentaje($politicaCancelacion['porcentaje_penalizacion']) }}%</strong>.
+                        </p>
+                        <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                            Los créditos tendrán una vigencia de <strong>{{ $politicaCancelacion['vigencia_creditos_dias'] }} días</strong> desde su acreditación. Permanecen dentro de la plataforma y no se reintegran al medio de pago.
+                        </p>
+                        <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                            La suspensión es definitiva una vez confirmada.
+                        </p>
+                    </div>
+
+                    <label style="display:flex; width:100%; min-width:0; align-items:flex-start; gap:10px; color:#111827; font-size:14px; font-weight:600; cursor:pointer; white-space:normal;">
+                        <input type="checkbox"
+                               name="acepta_terminos"
+                               value="1"
+                               required
+                               x-model="aceptado"
+                               style="width:16px; height:16px; margin-top:2px; flex-shrink:0;">
+                        <span style="min-width:0; flex:1; white-space:normal; overflow-wrap:anywhere;">He leído y acepto los términos y condiciones de suspensión.</span>
+                    </label>
+                @else
+                    <div style="padding:12px; border:1px solid #fecaca; border-radius:10px; background:#fef2f2; color:#991b1b; font-size:14px; white-space:normal; overflow-wrap:anywhere;">
+                        {{ $politicaCancelacionError ?? 'La política de suspensión no está disponible o es inválida.' }}
+                    </div>
+                @endif
 
                 <div style="display:flex; width:100%; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:10px; white-space:normal;">
                     <button type="button"
@@ -172,10 +198,11 @@
                     </button>
 
                     <button type="submit"
+                            @disabled(! $politicaCancelacion)
                             x-bind:disabled="! aceptado"
                             x-bind:style="! aceptado ? 'opacity:0.5; cursor:not-allowed;' : 'opacity:1; cursor:pointer;'"
                             style="display:inline-flex; align-items:center; justify-content:center; padding:8px 14px; border-radius:10px; background:#dc2626; color:#fff; font-size:13px; font-weight:800; border:none;">
-                        Confirmar cancelación
+                        Confirmar suspensión
                     </button>
                 </div>
             </form>

@@ -5,12 +5,14 @@ namespace App\Filament\Alumno\Resources\Turnos;
 use App\Filament\Alumno\Resources\Turnos\Pages\ListTurnos;
 use App\Models\Turno;
 use App\Models\User;
+use App\Services\CreditoService;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 use Filament\Forms\Components\DatePicker;
 use Filament\Tables;
@@ -35,6 +37,25 @@ class TurnoResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $politicaCancelacion = null;
+        $politicaCancelacionError = null;
+
+        try {
+            $creditoService = app(CreditoService::class);
+            $politica = $creditoService->obtenerPoliticaVigente();
+
+            $politicaCancelacion = [
+                'horas_sin_penalizacion' => (int) $politica->horas_cancelacion_sin_penalizacion,
+                'porcentaje_credito_anticipado' => (float) $politica->porcentaje_credito_anticipado,
+                'porcentaje_credito_tardio' => (float) $politica->porcentaje_credito_tardio,
+                'porcentaje_penalizacion' => (float) $politica->porcentaje_penalizacion_tardia,
+                'vigencia_creditos_dias' => (int) $politica->vigencia_creditos_dias,
+                'version' => $creditoService->huellaPolitica($politica),
+            ];
+        } catch (ValidationException) {
+            $politicaCancelacionError = 'La política de suspensión no está disponible o es inválida.';
+        }
+
         return $table
             ->columns([
                 TextColumn::make('estado')
@@ -49,14 +70,16 @@ class TurnoResource extends Resource
                         'danger'  => Turno::ESTADO_RECHAZADO,
                         'gray'    => Turno::ESTADO_VENCIDO,
                     ])
-                    ->formatStateUsing(fn (?string $state) => match ($state) {
+                    ->formatStateUsing(fn (?string $state, Turno $record) => match ($state) {
                         Turno::ESTADO_PENDIENTE => 'Pendiente',
                         Turno::ESTADO_ACEPTADO => 'Aceptado',
                         Turno::ESTADO_PENDIENTE_PAGO => 'Pendiente de pago',
                         Turno::ESTADO_CONFIRMADO => 'Clase pagada',
                         Turno::ESTADO_SUSPENDIDO_PROFESOR => 'Suspendido por profesor',
                         Turno::ESTADO_RECHAZADO => 'Rechazado',
-                        Turno::ESTADO_CANCELADO => 'Cancelado',
+                        Turno::ESTADO_CANCELADO => $record->reprogramado_por_turno_id
+                            ? 'Reprogramado'
+                            : ($record->cancelacion_tipo ? 'Suspendida por el alumno' : 'Cancelado'),
                         Turno::ESTADO_VENCIDO => 'Vencido',
                         default => $state ? ucfirst($state) : '-',
                     }),
@@ -107,7 +130,11 @@ class TurnoResource extends Resource
 
                 ViewColumn::make('acciones')
                     ->label('Acciones')
-                    ->view('filament.alumno.turnos.acciones'),
+                    ->view('filament.alumno.turnos.acciones')
+                    ->viewData([
+                        'politicaCancelacion' => $politicaCancelacion,
+                        'politicaCancelacionError' => $politicaCancelacionError,
+                    ]),
             ])
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
@@ -120,7 +147,7 @@ class TurnoResource extends Resource
                         Turno::ESTADO_CONFIRMADO     => 'Clase pagada',
                         Turno::ESTADO_SUSPENDIDO_PROFESOR => 'Suspendido por profesor',
                         Turno::ESTADO_RECHAZADO      => 'Rechazado',
-                        Turno::ESTADO_CANCELADO      => 'Cancelado',
+                        Turno::ESTADO_CANCELADO      => 'Suspendida / reprogramada',
                         Turno::ESTADO_VENCIDO        => 'Vencido',
                         Turno::ESTADO_ACEPTADO       => 'Aceptado (legacy)',
                     ])

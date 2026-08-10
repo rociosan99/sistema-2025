@@ -53,6 +53,20 @@ class CreditoService
         return $politica;
     }
 
+    public function huellaPolitica(PoliticaCancelacion $politica): string
+    {
+        return hash('sha256', json_encode([
+            'id' => (int) $politica->id,
+            'codigo' => (string) $politica->codigo,
+            'horas_cancelacion_sin_penalizacion' => (int) $politica->horas_cancelacion_sin_penalizacion,
+            'porcentaje_credito_anticipado' => (string) $politica->porcentaje_credito_anticipado,
+            'porcentaje_credito_tardio' => (string) $politica->porcentaje_credito_tardio,
+            'porcentaje_penalizacion_tardia' => (string) $politica->porcentaje_penalizacion_tardia,
+            'vigencia_creditos_dias' => (int) $politica->vigencia_creditos_dias,
+            'updated_at' => $politica->updated_at?->format('Y-m-d H:i:s.uP'),
+        ], JSON_THROW_ON_ERROR));
+    }
+
     public function registrarCancelacion(
         Turno $turno,
         PoliticaCancelacion $politica,

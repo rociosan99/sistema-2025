@@ -2,6 +2,7 @@
 
 namespace App\Filament\Profesor\Pages;
 
+use App\Models\CalificacionAlumno;
 use App\Models\Disponibilidad;
 use App\Models\Materia;
 use App\Models\OfertaSolicitud;
@@ -108,6 +109,7 @@ class OfertasSolicitudes extends Page
 
             $visibles[] = [
                 'id' => $oferta->id,
+                'alumno_id' => (int) $solicitud->alumno_id,
                 'alumno' => trim(($solicitud->alumno->name ?? '') . ' ' . ($solicitud->alumno->apellido ?? '')),
                 'materia' => $solicitud->materia?->materia_nombre ?? '-',
                 'tema' => $solicitud->tema?->tema_nombre ?? '-',
@@ -117,6 +119,34 @@ class OfertasSolicitudes extends Page
                 'expires_at' => $vencimiento->format('d/m/Y H:i'),
             ];
         }
+
+        $alumnoIds = collect($visibles)
+            ->pluck('alumno_id')
+            ->unique()
+            ->values();
+
+        $calificacionesPorAlumno = $alumnoIds->isEmpty()
+            ? collect()
+            : CalificacionAlumno::query()
+                ->whereIn('alumno_id', $alumnoIds)
+                ->select('alumno_id')
+                ->selectRaw('AVG(estrellas) as promedio')
+                ->selectRaw('COUNT(*) as cantidad')
+                ->groupBy('alumno_id')
+                ->get()
+                ->keyBy('alumno_id');
+
+        foreach ($visibles as &$ofertaVisible) {
+            $resumen = $calificacionesPorAlumno->get($ofertaVisible['alumno_id']);
+
+            $ofertaVisible['calificacion_promedio'] = $resumen
+                ? round((float) $resumen->promedio, 1)
+                : null;
+            $ofertaVisible['calificaciones_cantidad'] = $resumen
+                ? (int) $resumen->cantidad
+                : 0;
+        }
+        unset($ofertaVisible);
 
         $this->ofertas = $visibles;
     }

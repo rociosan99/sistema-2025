@@ -22,6 +22,7 @@ class TurnoCancelarPanelController extends Controller
     ) {
         $request->validate([
             'acepta_terminos' => ['accepted'],
+            'politica_version' => ['required', 'string', 'size:64'],
         ]);
 
         $alumnoAutenticadoId = (int) Auth::id();
@@ -35,7 +36,17 @@ class TurnoCancelarPanelController extends Controller
         } catch (ValidationException $exception) {
             return back()->with(
                 'error',
-                $exception->validator->errors()->first() ?: 'No se pudo validar la política de cancelación.',
+                'La política de suspensión no está disponible o es inválida.',
+            );
+        }
+
+        if (! hash_equals(
+            $creditoService->huellaPolitica($politica),
+            (string) $request->input('politica_version'),
+        )) {
+            return back()->with(
+                'error',
+                'La política de suspensión cambió. Recargá la página y revisá nuevamente los términos.',
             );
         }
 
@@ -75,7 +86,7 @@ class TurnoCancelarPanelController extends Controller
                     Turno::ESTADO_CONFIRMADO,
                 ], true)) {
                     throw ValidationException::withMessages([
-                        'turno' => 'Este turno no se puede cancelar.',
+                        'turno' => 'Este turno no se puede suspender.',
                     ]);
                 }
 
@@ -144,7 +155,7 @@ class TurnoCancelarPanelController extends Controller
         } catch (ValidationException $exception) {
             return back()->with(
                 'error',
-                $exception->validator->errors()->first() ?: 'No se pudo cancelar el turno.',
+                $exception->validator->errors()->first() ?: 'No se pudo suspender la clase.',
             );
         }
 
@@ -180,9 +191,9 @@ class TurnoCancelarPanelController extends Controller
                 'cancelacion_tipo' => $resultado['tipo_cancelacion'],
             ]);
 
-            return back()->with('success', 'Clase cancelada con cargo. Se buscará un reemplazo.');
+            return back()->with('success', 'Clase suspendida con penalización. Se buscará un reemplazo.');
         }
 
-        return back()->with('success', 'Clase cancelada sin cargo. Si querés, podés reprogramar desde el botón Reprogramar.');
+        return back()->with('success', 'Clase suspendida sin penalización. Si querés, podés reprogramar desde el botón Reprogramar.');
     }
 }
