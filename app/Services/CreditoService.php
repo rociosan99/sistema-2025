@@ -32,12 +32,29 @@ class CreditoService
         $creditoTardio = (float) $politica->porcentaje_credito_tardio;
         $penalizacionTardia = (float) $politica->porcentaje_penalizacion_tardia;
         $vigenciaDias = $politica->vigencia_creditos_dias;
+        $porcentajeProfesorPenalizacion = $politica->porcentaje_profesor_penalizacion;
+        $porcentajePlataformaPenalizacion = $politica->porcentaje_plataforma_penalizacion;
 
-        if ($horas < 0 || $vigenciaDias === null || $vigenciaDias < 1) {
+        if (
+            $horas < 0
+            || $vigenciaDias === null
+            || $vigenciaDias < 1
+            || $porcentajeProfesorPenalizacion === null
+            || $porcentajePlataformaPenalizacion === null
+        ) {
             $this->politicaInvalida();
         }
 
-        foreach ([$creditoAnticipado, $creditoTardio, $penalizacionTardia] as $porcentaje) {
+        $porcentajeProfesorPenalizacion = (float) $porcentajeProfesorPenalizacion;
+        $porcentajePlataformaPenalizacion = (float) $porcentajePlataformaPenalizacion;
+
+        foreach ([
+            $creditoAnticipado,
+            $creditoTardio,
+            $penalizacionTardia,
+            $porcentajeProfesorPenalizacion,
+            $porcentajePlataformaPenalizacion,
+        ] as $porcentaje) {
             if (
                 $porcentaje < self::PORCENTAJE_MINIMO
                 || $porcentaje > self::PORCENTAJE_MAXIMO
@@ -47,6 +64,15 @@ class CreditoService
         }
 
         if (abs(($creditoTardio + $penalizacionTardia) - self::PORCENTAJE_MAXIMO) > 0.001) {
+            $this->politicaInvalida();
+        }
+
+        if (
+            abs(
+                ($porcentajeProfesorPenalizacion + $porcentajePlataformaPenalizacion)
+                - self::PORCENTAJE_MAXIMO
+            ) > 0.001
+        ) {
             $this->politicaInvalida();
         }
 
@@ -63,6 +89,8 @@ class CreditoService
             'porcentaje_credito_tardio' => (string) $politica->porcentaje_credito_tardio,
             'porcentaje_penalizacion_tardia' => (string) $politica->porcentaje_penalizacion_tardia,
             'vigencia_creditos_dias' => (int) $politica->vigencia_creditos_dias,
+            'porcentaje_profesor_penalizacion' => (string) $politica->porcentaje_profesor_penalizacion,
+            'porcentaje_plataforma_penalizacion' => (string) $politica->porcentaje_plataforma_penalizacion,
             'updated_at' => $politica->updated_at?->format('Y-m-d H:i:s.uP'),
         ], JSON_THROW_ON_ERROR));
     }
@@ -107,6 +135,13 @@ class CreditoService
             ? $this->calcularImportes($pago, $porcentajeCredito)
             : $this->importesEnCero();
 
+        $porcentajeProfesorPenalizacion = (float) $politica->porcentaje_profesor_penalizacion;
+        $porcentajePlataformaPenalizacion = (float) $politica->porcentaje_plataforma_penalizacion;
+        $repartoPenalizacion = $this->calcularRepartoPenalizacion(
+            (float) $importes['importe_penalizacion'],
+            $porcentajeProfesorPenalizacion,
+        );
+
         $vigenciaDias = (int) $politica->vigencia_creditos_dias;
         $venceAt = $estado === Credito::ESTADO_DISPONIBLE
             ? now()->addDays($vigenciaDias)
@@ -117,8 +152,11 @@ class CreditoService
             'turno_id' => $turno->id,
             'pago_id' => $pago?->pago_id,
             ...$importes,
+            ...$repartoPenalizacion,
             'porcentaje_credito_aplicado' => $porcentajeCredito,
             'porcentaje_penalizacion_aplicado' => $porcentajePenalizacion,
+            'porcentaje_profesor_penalizacion_aplicado' => $porcentajeProfesorPenalizacion,
+            'porcentaje_plataforma_penalizacion_aplicado' => $porcentajePlataformaPenalizacion,
             'horas_limite_aplicadas' => $politica->horas_cancelacion_sin_penalizacion,
             'vigencia_dias_aplicada' => $vigenciaDias,
             'estado' => $estado,
@@ -164,12 +202,45 @@ class CreditoService
                 ]);
             }
 
+            $importes = $this->calcularImportes(
+                $pagoBloqueado,
+                (float) $credito->porcentaje_credito_aplicado,
+            );
+
+            $repartoPenalizacion = [];
+
+            if (
+                $credito->porcentaje_profesor_penalizacion_aplicado !== null
+                && $credito->porcentaje_plataforma_penalizacion_aplicado !== null
+            ) {
+                $porcentajeProfesor = (float) $credito->porcentaje_profesor_penalizacion_aplicado;
+                $porcentajePlataforma = (float) $credito->porcentaje_plataforma_penalizacion_aplicado;
+
+                if (
+                    $porcentajeProfesor < self::PORCENTAJE_MINIMO
+                    || $porcentajeProfesor > self::PORCENTAJE_MAXIMO
+                    || $porcentajePlataforma < self::PORCENTAJE_MINIMO
+                    || $porcentajePlataforma > self::PORCENTAJE_MAXIMO
+                    || abs(
+                        ($porcentajeProfesor + $porcentajePlataforma)
+                        - self::PORCENTAJE_MAXIMO
+                    ) > 0.001
+                ) {
+                    throw ValidationException::withMessages([
+                        'credito' => 'El reparto de la penalización del crédito es inválido.',
+                    ]);
+                }
+
+                $repartoPenalizacion = $this->calcularRepartoPenalizacion(
+                    (float) $importes['importe_penalizacion'],
+                    $porcentajeProfesor,
+                );
+            }
+
             $credito->update([
                 'pago_id' => $pagoBloqueado->pago_id,
-                ...$this->calcularImportes(
-                    $pagoBloqueado,
-                    (float) $credito->porcentaje_credito_aplicado,
-                ),
+                ...$importes,
+                ...$repartoPenalizacion,
                 'estado' => Credito::ESTADO_DISPONIBLE,
                 'vence_at' => now()->addDays($credito->vigencia_dias_aplicada),
             ]);
@@ -229,6 +300,25 @@ class CreditoService
             'importe_credito' => 0.0,
             'importe_penalizacion' => 0.0,
             'saldo_disponible' => 0.0,
+        ];
+    }
+
+    /** @return array{importe_penalizacion_profesor:float, importe_penalizacion_plataforma:float} */
+    private function calcularRepartoPenalizacion(
+        float $importePenalizacion,
+        float $porcentajeProfesor,
+    ): array {
+        $importeProfesor = round(
+            $importePenalizacion * $porcentajeProfesor / self::PORCENTAJE_MAXIMO,
+            2,
+        );
+
+        return [
+            'importe_penalizacion_profesor' => $importeProfesor,
+            'importe_penalizacion_plataforma' => round(
+                $importePenalizacion - $importeProfesor,
+                2,
+            ),
         ];
     }
 
