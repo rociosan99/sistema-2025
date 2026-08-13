@@ -60,6 +60,13 @@ class Turno extends Model
         'suspendido_por_id',
         'suspension_motivo',
 
+        'reemplazo_profesor_propuesto_id',
+        'reemplazo_fecha',
+        'reemplazo_hora_inicio',
+        'reemplazo_hora_fin',
+        'reemplazo_solicitado_at',
+        'reemplazo_expires_at',
+
         // ✅ si lo tenés en DB
         'recordatorio_24h_enviado_at',
 
@@ -84,6 +91,12 @@ class Turno extends Model
 
         // ✅ suspensión por profesor
         'suspendido_at' => 'datetime',
+
+        'reemplazo_fecha' => 'date',
+        'reemplazo_hora_inicio' => 'string',
+        'reemplazo_hora_fin' => 'string',
+        'reemplazo_solicitado_at' => 'datetime',
+        'reemplazo_expires_at' => 'datetime',
 
         'asistencia_confirmada_at' => 'datetime',
         'asistencia_cancelada_at' => 'datetime',
@@ -119,6 +132,13 @@ class Turno extends Model
                 'suspendido_at',
                 'suspendido_por_id',
                 'suspension_motivo',
+
+                'reemplazo_profesor_propuesto_id',
+                'reemplazo_fecha',
+                'reemplazo_hora_inicio',
+                'reemplazo_hora_fin',
+                'reemplazo_solicitado_at',
+                'reemplazo_expires_at',
 
                 'asistencia_confirmada_at',
                 'asistencia_cancelada_at',
@@ -182,6 +202,11 @@ class Turno extends Model
     public function suspendidoPor()
     {
         return $this->belongsTo(User::class, 'suspendido_por_id');
+    }
+
+    public function profesorReemplazoPropuesto()
+    {
+        return $this->belongsTo(User::class, 'reemplazo_profesor_propuesto_id');
     }
 
     // Helpers

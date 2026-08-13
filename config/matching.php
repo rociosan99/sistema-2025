@@ -22,4 +22,10 @@ return [
     // ✅ máximo de alumnos a los que se invita por reemplazo
     // (para no spamear / no generar muchas invitaciones)
     'replacement_max_invites' => 10,
+
+    // Propuesta a otro profesor para una clase ya pagada y suspendida.
+    'professor_replacement_proposal_ttl_minutes' => (int) env(
+        'PROFESSOR_REPLACEMENT_PROPOSAL_TTL_MINUTES',
+        120,
+    ),
 ];
