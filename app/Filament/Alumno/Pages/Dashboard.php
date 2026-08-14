@@ -33,10 +33,39 @@ class Dashboard extends Page
     /** @var array<int, array> */
     public array $invitacionesReemplazo = [];
 
+    /** @var array<int, array{id:int, profesor:string, materia:string, fecha:string, horario:string, url:string}> */
+    public array $suspensionesProfesor = [];
+
     public function mount(): void
     {
         $this->cargarPendientes();
         $this->cargarInvitacionesReemplazo();
+        $this->cargarSuspensionesProfesor();
+    }
+
+    private function cargarSuspensionesProfesor(): void
+    {
+        $this->suspensionesProfesor = Turno::query()
+            ->where('alumno_id', Auth::id())
+            ->where('estado', Turno::ESTADO_SUSPENDIDO_PROFESOR)
+            ->with([
+                'profesor:id,name,apellido',
+                'materia:materia_id,materia_nombre',
+            ])
+            ->orderBy('fecha')
+            ->orderBy('hora_inicio')
+            ->get()
+            ->filter(fn (Turno $turno): bool => $turno->inicioDateTime()->isFuture())
+            ->map(fn (Turno $turno): array => [
+                'id' => (int) $turno->id,
+                'profesor' => trim(($turno->profesor?->name ?? '') . ' ' . ($turno->profesor?->apellido ?? '')) ?: 'Profesor',
+                'materia' => $turno->materia?->materia_nombre ?? '-',
+                'fecha' => $turno->fecha->format('d/m/Y'),
+                'horario' => substr((string) $turno->hora_inicio, 0, 5) . ' - ' . substr((string) $turno->hora_fin, 0, 5),
+                'url' => ResolverSuspension::getUrl(['record' => $turno->id], panel: 'alumno'),
+            ])
+            ->values()
+            ->all();
     }
 
     protected function getActions(): array

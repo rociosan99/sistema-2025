@@ -2,6 +2,43 @@
 
     <div style="display:flex; flex-direction:column; gap:18px;">
 
+        @if(count($this->propuestasReemplazo))
+            <div style="border:1px solid #bfdbfe;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 16px 34px rgba(0,0,0,.08);">
+                <div style="padding:14px 18px;background:linear-gradient(135deg,#1d4ed8 0%,#0ea5e9 100%);color:#fff;">
+                    <div style="font-size:16px;font-weight:900;">Propuestas de reemplazo pendientes</div>
+                    <div style="font-size:12px;opacity:.92;margin-top:2px;">Revisá cada propuesta antes de su vencimiento.</div>
+                </div>
+
+                <div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
+                    @foreach($this->propuestasReemplazo as $propuesta)
+                        <div style="border:1px solid rgba(15,23,42,.10);border-radius:16px;padding:14px;background:#fff;">
+                            <div style="font-size:16px;font-weight:900;color:#0f172a;">{{ $propuesta['alumno'] }}</div>
+                            <div style="margin-top:5px;font-size:13px;color:#334155;">
+                                {{ $propuesta['materia'] }}
+                                @if($propuesta['tema']) — {{ $propuesta['tema'] }} @endif
+                            </div>
+                            <div style="margin-top:5px;font-size:13px;color:#334155;">{{ $propuesta['fecha'] }} · {{ $propuesta['horario'] }}</div>
+                            <div style="margin-top:5px;font-size:13px;color:#334155;">
+                                @if($propuesta['calificaciones_cantidad'] > 0)
+                                    {{ number_format((float) $propuesta['calificacion_promedio'], 1, ',', '.') }} ★
+                                    ({{ $propuesta['calificaciones_cantidad'] }} {{ $propuesta['calificaciones_cantidad'] === 1 ? 'calificación' : 'calificaciones' }})
+                                @else
+                                    Sin calificaciones
+                                @endif
+                            </div>
+                            <div style="margin-top:5px;font-size:12px;font-weight:800;color:#b45309;">Vence: {{ $propuesta['vence'] }}</div>
+
+                            <div style="margin-top:12px;">
+                                <a href="{{ $propuesta['url'] }}" style="display:inline-flex;align-items:center;padding:9px 12px;border-radius:12px;background:#2563eb;color:#fff;font-size:13px;font-weight:900;text-decoration:none;">
+                                    Ver propuesta
+                                </a>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         {{-- =========================
             AGENDA SEMANAL (primero)
         ========================= --}}

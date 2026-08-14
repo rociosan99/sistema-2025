@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Filament\Alumno\Pages\ResolverSuspension;
 use App\Models\Turno;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -19,7 +20,10 @@ class AlumnoClaseSuspendidaPorProfesor extends Mailable
     public function __construct(Turno $turno)
     {
         $this->turno = $turno->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
-        $this->urlReprogramar = url('/alumno/reprogramar-turno?turno=' . $this->turno->id);
+        $this->urlReprogramar = ResolverSuspension::getUrl(
+            ['record' => $this->turno->id],
+            panel: 'alumno',
+        );
     }
 
     public function envelope(): Envelope

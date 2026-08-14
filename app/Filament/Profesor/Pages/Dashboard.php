@@ -2,6 +2,7 @@
 
 namespace App\Filament\Profesor\Pages;
 
+use App\Models\CalificacionAlumno;
 use App\Models\MotivoCalificacion;
 use App\Models\Turno;
 use App\Services\CalificacionAlumnoService;
@@ -35,6 +36,9 @@ class Dashboard extends Page
 
     /** ✅ Pendientes de calificar (alumnos) */
     public array $pendientesCalificar = [];
+
+    /** @var array<int, array> */
+    public array $propuestasReemplazo = [];
 
     public function mount(): void
     {
@@ -72,6 +76,57 @@ class Dashboard extends Page
 
         // ✅ Pendientes de calificar (confirmado + ya pasó + sin calificacion)
         $this->cargarPendientesCalificar();
+
+        $this->cargarPropuestasReemplazo();
+    }
+
+    private function cargarPropuestasReemplazo(): void
+    {
+        $turnos = Turno::query()
+            ->where('reemplazo_profesor_propuesto_id', Auth::id())
+            ->where('estado', Turno::ESTADO_SUSPENDIDO_PROFESOR)
+            ->whereNotNull('reemplazo_expires_at')
+            ->where('reemplazo_expires_at', '>', now())
+            ->with([
+                'alumno:id,name,apellido',
+                'materia:materia_id,materia_nombre',
+                'tema:tema_id,tema_nombre',
+            ])
+            ->orderBy('reemplazo_expires_at')
+            ->get();
+
+        $alumnoIds = $turnos->pluck('alumno_id')->unique()->values();
+
+        $calificaciones = $alumnoIds->isEmpty()
+            ? collect()
+            : CalificacionAlumno::query()
+                ->whereIn('alumno_id', $alumnoIds)
+                ->select('alumno_id')
+                ->selectRaw('AVG(estrellas) as promedio, COUNT(*) as cantidad')
+                ->groupBy('alumno_id')
+                ->get()
+                ->keyBy('alumno_id');
+
+        $this->propuestasReemplazo = $turnos
+            ->map(function (Turno $turno) use ($calificaciones): array {
+                $resumen = $calificaciones->get($turno->alumno_id);
+                $cantidad = (int) ($resumen?->cantidad ?? 0);
+
+                return [
+                    'id' => (int) $turno->id,
+                    'alumno' => trim(($turno->alumno?->name ?? '') . ' ' . ($turno->alumno?->apellido ?? '')) ?: 'Alumno',
+                    'materia' => $turno->materia?->materia_nombre ?? '-',
+                    'tema' => $turno->tema?->tema_nombre,
+                    'fecha' => $turno->reemplazo_fecha?->format('d/m/Y') ?? '-',
+                    'horario' => substr((string) $turno->reemplazo_hora_inicio, 0, 5) . ' - ' . substr((string) $turno->reemplazo_hora_fin, 0, 5),
+                    'vence' => $turno->reemplazo_expires_at?->format('d/m/Y H:i') ?? '-',
+                    'calificacion_promedio' => $cantidad > 0 ? round((float) $resumen->promedio, 1) : null,
+                    'calificaciones_cantidad' => $cantidad,
+                    'url' => ResolverPropuestaReemplazo::getUrl(['record' => $turno->id], panel: 'profesor'),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     private function cargarAgendaSemana(): void

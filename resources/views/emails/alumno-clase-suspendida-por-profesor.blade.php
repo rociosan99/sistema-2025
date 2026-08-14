@@ -26,12 +26,12 @@
     </div>
 
     <p style="margin:0 0 10px 0;">
-        El pago sigue vigente y podés reprogramar la clase con el mismo profesor.
+        El pago sigue vigente. Podés reprogramar con el mismo profesor o solicitar un reemplazante disponible para el horario original.
     </p>
 
     <p style="margin:0 0 20px 0;">
         <a href="{{ $urlReprogramar }}" style="display:inline-block;padding:10px 14px;background:#10b981;color:#fff;text-decoration:none;border-radius:8px;">
-            Reprogramar clase
+            Resolver suspensión
         </a>
     </p>
 

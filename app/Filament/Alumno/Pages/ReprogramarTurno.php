@@ -8,6 +8,7 @@ use App\Mail\ProfesorTurnoReprogramado;
 use App\Models\Turno;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\ReemplazoProfesorService;
 use App\Services\SlotService;
 use BackedEnum;
 use Carbon\Carbon;
@@ -86,6 +87,11 @@ class ReprogramarTurno extends Page
 
             if (! $turno->pago->estaAprobado()) {
                 $this->errorMensaje = 'No se puede reprogramar porque el pago asociado aún no está aprobado.';
+                return;
+            }
+
+            if (app(ReemplazoProfesorService::class)->tienePropuestaVigente($turno)) {
+                $this->errorMensaje = 'No podés reprogramar con el profesor original mientras exista una propuesta de reemplazo vigente.';
                 return;
             }
         } else {
@@ -172,6 +178,27 @@ class ReprogramarTurno extends Page
 
         if ($this->turnoOriginal->estado === Turno::ESTADO_SUSPENDIDO_PROFESOR) {
             DB::transaction(function () use ($slot) {
+                $turnoBloqueado = Turno::query()
+                    ->whereKey($this->turnoOriginal->getKey())
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ((int) $turnoBloqueado->alumno_id !== (int) Auth::id()) {
+                    abort(404);
+                }
+
+                if ($turnoBloqueado->estado !== Turno::ESTADO_SUSPENDIDO_PROFESOR) {
+                    throw ValidationException::withMessages([
+                        'turno' => 'Esta suspensión ya fue resuelta.',
+                    ]);
+                }
+
+                if (app(ReemplazoProfesorService::class)->tienePropuestaVigente($turnoBloqueado)) {
+                    throw ValidationException::withMessages([
+                        'turno' => 'No podés reprogramar con el profesor original mientras exista una propuesta de reemplazo vigente.',
+                    ]);
+                }
+
                 $profesorActivo = User::query()
                     ->whereKey($slot['profesor_id'])
                     ->where('role', 'profesor')
@@ -207,14 +234,14 @@ class ReprogramarTurno extends Page
                     ]);
                 }
 
-                $this->turnoOriginal->refresh();
-
-                $this->turnoOriginal->update([
+                $turnoBloqueado->update([
                     'fecha' => $slot['fecha'],
                     'hora_inicio' => $slot['hora_inicio'],
                     'hora_fin' => $slot['hora_fin'],
                     'estado' => Turno::ESTADO_CONFIRMADO,
                 ]);
+
+                $this->turnoOriginal = $turnoBloqueado;
             });
 
             $this->turnoOriginal = Turno::with(['profesor', 'alumno', 'materia', 'tema', 'pago'])

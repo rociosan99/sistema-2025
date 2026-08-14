@@ -384,6 +384,22 @@
             </div>
         </div>
 
+        @foreach($this->suspensionesProfesor as $suspension)
+            <div class="al-section">
+                <div class="al-section-body" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:rgba(245,158,11,.10);">
+                    <div>
+                        <p style="margin:0;font-weight:900;color:#92400e;">Tu profesor suspendió una clase.</p>
+                        <p style="margin:4px 0 0;font-size:13px;color:#78350f;">
+                            {{ $suspension['materia'] }} · {{ $suspension['fecha'] }} · {{ $suspension['horario'] }} · {{ $suspension['profesor'] }}
+                        </p>
+                    </div>
+                    <a class="al-btn al-btn-accept" href="{{ $suspension['url'] }}" style="text-decoration:none;">
+                        Resolver suspensión
+                    </a>
+                </div>
+            </div>
+        @endforeach
+
         @if($proximaClase)
             <div class="al-section">
                 <div class="al-section-head" style="background: linear-gradient(135deg, #0f172a 0%, #2563eb 50%, #7c3aed 100%);">

@@ -71,16 +71,14 @@
     $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
     $horasHastaInicio = $inicioTurno ? $ahora->diffInHours($inicioTurno, false) : -999;
 
-    if ($estado === Turno::ESTADO_SUSPENDIDO_PROFESOR) {
-        $puedeReprogramar = ! $yaEmpezo;
-    } else {
-        $puedeReprogramar = in_array($estado, [
-            Turno::ESTADO_PENDIENTE,
-            Turno::ESTADO_PENDIENTE_PAGO,
-            Turno::ESTADO_CONFIRMADO,
-            Turno::ESTADO_CANCELADO,
-        ], true) && ! $yaEmpezo && ! $estaVencido && ($horasHastaInicio >= $horasRegla);
-    }
+    $puedeReprogramar = in_array($estado, [
+        Turno::ESTADO_PENDIENTE,
+        Turno::ESTADO_PENDIENTE_PAGO,
+        Turno::ESTADO_CONFIRMADO,
+        Turno::ESTADO_CANCELADO,
+    ], true) && ! $yaEmpezo && ! $estaVencido && ($horasHastaInicio >= $horasRegla);
+
+    $puedeResolverSuspension = $estaSuspendidoProfesor && ! $yaEmpezo;
 
     $puedeVerEnlace = $estaConfirmado && !empty($enlaceClase);
 @endphp
@@ -207,6 +205,13 @@
                 </div>
             </form>
         </x-filament::modal>
+    @endif
+
+    @if($puedeResolverSuspension)
+        <a href="{{ \App\Filament\Alumno\Pages\ResolverSuspension::getUrl(['record' => $record->id], panel: 'alumno') }}"
+           style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; background:#10b981; color:#fff; font-size:12px; font-weight:800; text-decoration:none;">
+            Resolver suspensión
+        </a>
     @endif
 
     @if($puedeVerEnlace)
