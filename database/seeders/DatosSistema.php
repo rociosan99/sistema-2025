@@ -469,8 +469,36 @@ class DatosSistema extends Seeder
 
     private function seedProfesorProfiles(array $profesores, array $profesorCareerMap, array $careerMateriaMap, array $materiaStrategyMap): void
     {
-        $ciudades = ['Buenos Aires', 'Córdoba', 'La Plata', 'Rosario'];
-        $niveles = ['inicial', 'intermedio', 'avanzado'];
+        $ubicaciones = [
+            ['pais' => 'Argentina', 'provincia' => 'Ciudad Autónoma de Buenos Aires', 'ciudad' => 'Buenos Aires'],
+            ['pais' => 'Argentina', 'provincia' => 'Córdoba', 'ciudad' => 'Córdoba'],
+            ['pais' => 'Argentina', 'provincia' => 'Buenos Aires', 'ciudad' => 'La Plata'],
+            ['pais' => 'Argentina', 'provincia' => 'Santa Fe', 'ciudad' => 'Rosario'],
+        ];
+        $ciudadIds = [];
+
+        foreach ($ubicaciones as $ubicacion) {
+            $ciudadId = DB::table('ciudades as ciudad')
+                ->join('provincias as provincia', 'provincia.provincia_id', '=', 'ciudad.provincia_id')
+                ->join('paises as pais', 'pais.pais_id', '=', 'provincia.pais_id')
+                ->where('pais.pais_nombre', $ubicacion['pais'])
+                ->where('provincia.provincia_nombre', $ubicacion['provincia'])
+                ->where('ciudad.ciudad_nombre', $ubicacion['ciudad'])
+                ->value('ciudad.ciudad_id');
+
+            if ($ciudadId === null) {
+                throw new \RuntimeException(sprintf(
+                    'No se encontró la ubicación requerida para los perfiles de profesores: %s, %s, %s.',
+                    $ubicacion['ciudad'],
+                    $ubicacion['provincia'],
+                    $ubicacion['pais']
+                ));
+            }
+
+            $ciudadIds[] = (int) $ciudadId;
+        }
+
+        $niveles = ['junior', 'semi', 'senior'];
         $titulos = ['Licenciado/a', 'Ingeniero/a', 'Profesor/a', 'Abogado/a', 'Contador/a', 'Médico/a'];
 
         foreach ($profesores as $index => $profesorId) {
@@ -482,7 +510,7 @@ class DatosSistema extends Seeder
             DB::table('profesor_profiles')->updateOrInsert(
                 ['user_id' => $profesorId],
                 [
-                    'ciudad' => $ciudades[$index % count($ciudades)],
+                    'ciudad_id' => $ciudadIds[$index % count($ciudadIds)],
                     'bio' => 'Docente particular especializado en acompañamiento académico universitario.',
                     'experiencia_anios' => rand(2, 12),
                     'nivel' => $niveles[array_rand($niveles)],
