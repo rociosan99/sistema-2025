@@ -396,13 +396,39 @@ class SolicitarTurno extends Page
                 ->send(new TurnoSolicitado($turno));
         });
 
-        $this->consultarAhora();
+        $this->reiniciarFormularioDespuesDeReserva();
         $this->mostrarModalExito = true;
     }
 
     public function cerrarModalExito(): void
     {
         $this->mostrarModalExito = false;
+    }
+
+    private function reiniciarFormularioDespuesDeReserva(): void
+    {
+        $this->profesorId = null;
+        $this->materiaId = null;
+        $this->temaId = null;
+
+        $this->profesor = null;
+        $this->materia = null;
+        $this->tema = null;
+
+        $this->busqueda = null;
+        $this->sugerenciasMaterias = [];
+        $this->sugerenciasTemas = [];
+
+        $this->fecha = null;
+        $this->filtroProfesorId = null;
+        $this->filtroHoraDesde = null;
+        $this->filtroHoraHasta = null;
+        $this->profesoresDisponibles = [];
+
+        $this->slotsOriginales = [];
+        $this->slots = [];
+
+        $this->resetValidation();
     }
 
     private function limpiarFiltrosYResultados(): void
