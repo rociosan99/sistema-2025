@@ -48,6 +48,7 @@ class MisCreditos extends Page
                     : '-',
                 'importe_pagado' => $credito->importe_pagado,
                 'importe_credito' => $credito->importe_credito,
+                'saldo_disponible' => $credito->saldo_disponible,
                 'importe_penalizacion' => $credito->importe_penalizacion,
                 'vence_at' => $credito->vence_at?->format('d/m/Y H:i'),
                 'estado_visual' => $this->estadoVisual($credito),
@@ -64,6 +65,8 @@ class MisCreditos extends Page
         return match (true) {
             $credito->estado === Credito::ESTADO_ESPERANDO_PAGO => 'esperando_pago',
             $credito->estado === Credito::ESTADO_NO_APLICA => 'no_aplica',
+            $credito->estado === Credito::ESTADO_DISPONIBLE
+                && (float) $credito->saldo_disponible <= 0 => 'utilizado',
             $credito->estado === Credito::ESTADO_DISPONIBLE && $credito->vence_at === null => 'sin_vencimiento',
             $credito->estado === Credito::ESTADO_DISPONIBLE && $credito->vence_at->isPast() => 'vencido',
             $credito->estado === Credito::ESTADO_DISPONIBLE => 'disponible',
@@ -75,6 +78,7 @@ class MisCreditos extends Page
     {
         return match ($this->estadoVisual($credito)) {
             'esperando_pago' => 'Esperando pago',
+            'utilizado' => 'Utilizado',
             'disponible' => 'Disponible',
             'vencido' => 'Vencido',
             'sin_vencimiento' => 'Sin vencimiento',

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Credito extends Model
 {
@@ -67,5 +68,10 @@ class Credito extends Model
     public function pago(): BelongsTo
     {
         return $this->belongsTo(Pago::class, 'pago_id', 'pago_id');
+    }
+
+    public function aplicaciones(): HasMany
+    {
+        return $this->hasMany(CreditoAplicacion::class, 'credito_id', 'id');
     }
 }

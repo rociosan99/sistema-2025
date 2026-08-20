@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Pago;
 use App\Models\Turno;
+use App\Services\AplicacionCreditoService;
 use App\Services\AuditLogger;
 use App\Services\CreditoService;
 use App\Services\MercadoPagoService;
@@ -75,7 +76,11 @@ class MercadoPagoController extends Controller
                 abort(403, 'El turno no está pendiente de pago.');
             }
 
-            if ($pagoExistente && $pagoExistente->mp_init_point) {
+            if (
+                $pagoExistente
+                && $pagoExistente->estado === Pago::ESTADO_PENDIENTE
+                && $pagoExistente->mp_init_point
+            ) {
                 $audit->log('pago.reuso_preference', $turno, [
                     'turno_id' => $turno->id,
                     'mp_init_point' => $pagoExistente->mp_init_point,
@@ -174,7 +179,11 @@ class MercadoPagoController extends Controller
                 ]);
             }
 
-            if ($pagoExistente && $pagoExistente->mp_init_point) {
+            if (
+                $pagoExistente
+                && $pagoExistente->estado === Pago::ESTADO_PENDIENTE
+                && $pagoExistente->mp_init_point
+            ) {
                 $audit->log('pago.mail_reuso_preference', $turno, [
                     'turno_id' => $turno->id,
                     'mp_init_point' => $pagoExistente->mp_init_point,
@@ -374,10 +383,16 @@ class MercadoPagoController extends Controller
         $statusDetail = (string) ($payment->status_detail ?? '');
         $externalRef = (string) ($payment->external_reference ?? '');
 
-        if ($externalRef !== "turno:{$turno->id}") {
+        $pagoExistente = Pago::query()
+            ->where('turno_id', $turno->id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $pagoExistente || ! hash_equals((string) $pagoExistente->external_reference, $externalRef)) {
             Log::warning('Pago external_reference no coincide', [
                 'turno_id' => $turno->id,
                 'external_reference' => $externalRef,
+                'external_reference_vigente' => $pagoExistente?->external_reference,
                 'payment_id' => $paymentId,
             ]);
 
@@ -396,9 +411,22 @@ class MercadoPagoController extends Controller
             ];
         }
 
-        $pagoExistente = $turno->pago;
+        if ($pagoExistente->estado === Pago::ESTADO_RECHAZADO) {
+            Log::warning('Evento ignorado para intento de pago ya rechazado', [
+                'turno_id' => $turno->id,
+                'external_reference' => $externalRef,
+                'payment_id' => $paymentId,
+                'status' => $status,
+            ]);
 
-        if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
+            return [
+                'titulo' => 'Intento cerrado',
+                'mensaje' => 'Este intento de pago ya fue rechazado y no puede modificarse.',
+                'status' => 'rejected',
+            ];
+        }
+
+        if ($pagoExistente->estado === Pago::ESTADO_APROBADO) {
             if (
                 ! empty($pagoExistente->mp_payment_id) &&
                 $pagoExistente->mp_payment_id !== $paymentId
@@ -420,6 +448,12 @@ class MercadoPagoController extends Controller
                         'mp_status_detail_recibido' => $statusDetail,
                     ]);
                 }
+
+                return [
+                    'titulo' => 'Pago inválido',
+                    'mensaje' => 'El intento ya fue aprobado con otro identificador de pago.',
+                    'status' => 'invalid',
+                ];
             }
 
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
@@ -440,11 +474,55 @@ class MercadoPagoController extends Controller
             ];
         }
 
+        $montoEsperado = $pagoExistente->monto_mercadopago !== null
+            ? (string) $pagoExistente->monto_mercadopago
+            : (string) $pagoExistente->monto;
+        $montoRecibido = number_format((float) ($payment->transaction_amount ?? 0), 2, '.', '');
+
+        if ($this->aCentavos($montoRecibido) !== $this->aCentavos($montoEsperado)) {
+            Log::warning('Importe de Mercado Pago no coincide con el intento vigente', [
+                'turno_id' => $turno->id,
+                'external_reference' => $externalRef,
+                'monto_esperado' => $montoEsperado,
+                'monto_recibido' => $montoRecibido,
+            ]);
+
+            return [
+                'titulo' => 'Pago inválido',
+                'mensaje' => 'El importe recibido no coincide con el intento vigente.',
+                'status' => 'invalid',
+            ];
+        }
+
+        $aplicacionCreditoService = app(AplicacionCreditoService::class);
+        $creditoReservado = (string) $turno->aplicacionesCredito()
+            ->where('estado', \App\Models\CreditoAplicacion::ESTADO_RESERVADO)
+            ->lockForUpdate()
+            ->get(['importe'])
+            ->sum('importe');
+
+        $esPagoParcial = $this->aCentavos($montoEsperado)
+            < $this->aCentavos((string) $pagoExistente->monto);
+        $composicionInvalida = $esPagoParcial
+            ? $this->aCentavos($creditoReservado) <= 0
+                || $this->aCentavos($creditoReservado) + $this->aCentavos($montoEsperado)
+                    !== $this->aCentavos((string) $pagoExistente->monto)
+            : $this->aCentavos($creditoReservado) > 0;
+
+        if ($composicionInvalida) {
+            return [
+                'titulo' => 'Pago inválido',
+                'mensaje' => 'La composición del intento de pago no es válida.',
+                'status' => 'invalid',
+            ];
+        }
+
         $detalle = json_decode(json_encode($payment), true);
 
         $payloadPago = [
             'turno_id' => $turno->id,
             'monto' => $turno->precio_total,
+            'monto_mercadopago' => $montoEsperado,
             'moneda' => config('services.mercadopago.currency', 'ARS'),
             'provider' => 'mercadopago',
             'mp_payment_id' => $paymentId,
@@ -470,6 +548,10 @@ class MercadoPagoController extends Controller
             $pago = Pago::create($payloadPago);
         }
 
+        if ($status === 'rejected') {
+            $aplicacionCreditoService->liberarReservas($turno);
+        }
+
         if ($audit) {
             $audit->log('pago.estado_actualizado', $turno, [
                 'turno_id' => $turno->id,
@@ -482,6 +564,8 @@ class MercadoPagoController extends Controller
         }
 
         if ($status === 'approved') {
+            $aplicacionCreditoService->aplicarReservas($turno);
+
             if ($turno->estado === Turno::ESTADO_CANCELADO) {
                 app(CreditoService::class)->completarPorPagoAprobado($pago);
 
@@ -566,6 +650,14 @@ class MercadoPagoController extends Controller
         }
 
         return true;
+    }
+
+    private function aCentavos(string $importe): int
+    {
+        $importe = number_format((float) $importe, 2, '.', '');
+        [$entero, $decimales] = explode('.', $importe, 2);
+
+        return ((int) $entero * 100) + (int) $decimales;
     }
 
     private function extraerPaymentIdDesdeWebhook(Request $request): ?string

@@ -183,6 +183,11 @@ class Turno extends Model
         return $this->hasOne(Credito::class, 'turno_id', 'id');
     }
 
+    public function aplicacionesCredito()
+    {
+        return $this->hasMany(CreditoAplicacion::class, 'turno_id', 'id');
+    }
+
     public function calificacionProfesor()
     {
         return $this->hasOne(CalificacionProfesor::class, 'turno_id', 'id');

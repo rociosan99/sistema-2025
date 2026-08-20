@@ -113,8 +113,7 @@
     @endif
 
     @if($puedePagar)
-        <a href="{{ route('mp.pagar', ['turno' => $record->id]) }}"
-           target="_blank"
+        <a href="{{ \App\Filament\Alumno\Pages\CompletarPagoTurno::getUrl(['record' => $record->id], panel: 'alumno') }}"
            style="display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; background:#2563eb; color:#fff; font-size:12px; font-weight:700; text-decoration:none;">
             💳 Pagar
         </a>

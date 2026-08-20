@@ -26,6 +26,7 @@ class Pago extends Model
     protected $fillable = [
         'turno_id',
         'monto',
+        'monto_mercadopago',
         'moneda',
         'estado',
         'provider',
@@ -44,6 +45,7 @@ class Pago extends Model
     protected $casts = [
         'detalle_externo' => 'array',
         'monto' => 'decimal:2',
+        'monto_mercadopago' => 'decimal:2',
         'fecha_aprobado' => 'datetime',
     ];
 
@@ -57,6 +59,7 @@ class Pago extends Model
             ->logOnly([
                 'turno_id',
                 'monto',
+                'monto_mercadopago',
                 'moneda',
                 'estado',
                 'provider',

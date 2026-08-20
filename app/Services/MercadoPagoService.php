@@ -7,6 +7,8 @@ use App\Models\Turno;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use MercadoPago\Client\Preference\PreferenceClient;
 use MercadoPago\Exceptions\MPApiException;
 use MercadoPago\MercadoPagoConfig;
@@ -42,9 +44,9 @@ class MercadoPagoService
             }
         }
 
-        $precio = (float) $turno->precio_total;
+        $precioTotal = (float) $turno->precio_total;
 
-        if ($precio <= 0) {
+        if ($precioTotal <= 0) {
             Log::error('MP: precio_total inválido', [
                 'turno_id' => $turno->id,
                 'precio_total' => $turno->precio_total,
@@ -55,9 +57,45 @@ class MercadoPagoService
             );
         }
 
-        $precio = round($precio, 2);
+        $precioTotal = round($precioTotal, 2);
+        $pagoExistente = Pago::query()->where('turno_id', $turno->id)->first();
+        $creditoReservado = (string) $turno->aplicacionesCredito()
+            ->where('estado', \App\Models\CreditoAplicacion::ESTADO_RESERVADO)
+            ->sum('importe');
 
-        $externalReference = "turno:{$turno->id}";
+        if ($this->aCentavos($creditoReservado) > 0) {
+            if (
+                ! $pagoExistente
+                || $pagoExistente->estado !== Pago::ESTADO_PENDIENTE
+                || ! preg_match('/^turno:'.$turno->id.':intento:[0-9a-f-]{36}$/i', (string) $pagoExistente->external_reference)
+            ) {
+                throw ValidationException::withMessages([
+                    'credito' => 'La composición del intento de pago parcial no es válida.',
+                ]);
+            }
+
+            $precio = round((float) $pagoExistente->monto_mercadopago, 2);
+            $externalReference = (string) $pagoExistente->external_reference;
+
+            if (
+                $this->aCentavos($creditoReservado) + $this->aCentavos((string) $precio)
+                !== $this->aCentavos((string) $precioTotal)
+            ) {
+                throw ValidationException::withMessages([
+                    'credito' => 'La composición del intento no coincide con el precio total.',
+                ]);
+            }
+        } else {
+            $precio = $precioTotal;
+            $externalReference = "turno:{$turno->id}:intento:".Str::uuid();
+        }
+
+        if ($precio <= 0) {
+            throw ValidationException::withMessages([
+                'pago' => 'El importe a cobrar por Mercado Pago debe ser mayor que cero.',
+            ]);
+        }
+
         $client = new PreferenceClient();
 
         // OJO: el success vuelve a tu controller, procesa el payment_id y recién después redirige a turnos.
@@ -136,12 +174,20 @@ class MercadoPagoService
             ['turno_id' => $turno->id],
             [
                 'monto' => $turno->precio_total,
+                'monto_mercadopago' => number_format($precio, 2, '.', ''),
                 'moneda' => config('services.mercadopago.currency', 'ARS'),
                 'estado' => Pago::ESTADO_PENDIENTE,
                 'provider' => 'mercadopago',
                 'mp_preference_id' => $preference->id ?? null,
                 'mp_init_point' => $preference->init_point ?? null,
+                'mp_payment_id' => null,
+                'mp_status' => null,
+                'mp_status_detail' => null,
+                'mp_payment_type' => null,
+                'mp_payment_method' => null,
+                'detalle_externo' => null,
                 'external_reference' => $externalReference,
+                'fecha_aprobado' => null,
             ]
         );
     }
@@ -159,5 +205,13 @@ class MercadoPagoService
         }
 
         return url($path);
+    }
+
+    private function aCentavos(string $importe): int
+    {
+        $importe = number_format((float) $importe, 2, '.', '');
+        [$entero, $decimales] = explode('.', $importe, 2);
+
+        return ((int) $entero * 100) + (int) $decimales;
     }
 }
