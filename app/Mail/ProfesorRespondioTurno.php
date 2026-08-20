@@ -8,6 +8,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\URL;
 
 class ProfesorRespondioTurno extends Mailable
 {
@@ -20,8 +21,12 @@ class ProfesorRespondioTurno extends Mailable
     {
         $this->turno = $turno->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
 
-        // Si tu panel alumno está en otro path, cambiá esta URL:
-        $this->urlPanelAlumno = url('/alumno/turnos');
+        $this->urlPanelAlumno = $this->turno->estado === Turno::ESTADO_PENDIENTE_PAGO
+            ? URL::signedRoute('mp.pagar.mail', [
+                'turno' => $this->turno->id,
+                'alumno_id' => $this->turno->alumno_id,
+            ])
+            : url('/alumno/turnos');
     }
 
     public function envelope(): Envelope

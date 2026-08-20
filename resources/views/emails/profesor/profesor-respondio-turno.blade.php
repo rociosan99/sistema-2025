@@ -48,7 +48,7 @@
     <p style="margin-top: 12px;">
         <a href="{{ $urlPanelAlumno }}"
            style="display:inline-block; padding:10px 14px; background:#16a34a; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:700;">
-            Ir a mis turnos
+            {{ $estado === \App\Models\Turno::ESTADO_PENDIENTE_PAGO ? 'Completar pago' : 'Ir a mis turnos' }}
         </a>
     </p>
 

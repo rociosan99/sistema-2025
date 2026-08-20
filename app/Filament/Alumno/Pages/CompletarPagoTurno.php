@@ -3,6 +3,7 @@
 namespace App\Filament\Alumno\Pages;
 
 use App\Filament\Alumno\Resources\Turnos\TurnoResource;
+use App\Models\Pago;
 use App\Models\Turno;
 use App\Services\AplicacionCreditoService;
 use BackedEnum;
@@ -27,8 +28,38 @@ class CompletarPagoTurno extends Page
 
     public function mount(int|string $record): void
     {
-        $this->turno = Turno::query()->findOrFail($record);
+        $this->turno = Turno::query()->with('pago')->findOrFail($record);
         abort_unless((int) $this->turno->alumno_id === (int) Auth::id(), 404);
+
+        if (
+            $this->turno->estado === Turno::ESTADO_CONFIRMADO
+            || $this->turno->pago?->estado === Pago::ESTADO_APROBADO
+        ) {
+            $this->volverATurnos('Este turno ya está pagado.', 'success');
+            return;
+        }
+
+        if (in_array($this->turno->estado, [
+            Turno::ESTADO_CANCELADO,
+            Turno::ESTADO_SUSPENDIDO_PROFESOR,
+        ], true)) {
+            $this->volverATurnos('Este turno fue suspendido o cancelado.', 'warning');
+            return;
+        }
+
+        if (
+            $this->turno->estado === Turno::ESTADO_VENCIDO
+            || $this->turno->inicioDateTime()->isPast()
+        ) {
+            $this->volverATurnos('Este turno ya venció y no puede pagarse.', 'warning');
+            return;
+        }
+
+        if ($this->turno->estado !== Turno::ESTADO_PENDIENTE_PAGO) {
+            $this->volverATurnos('Este turno ya no está pendiente de pago.', 'warning');
+            return;
+        }
+
         $this->actualizarResumen();
     }
 
@@ -97,5 +128,15 @@ class CompletarPagoTurno extends Page
     {
         $this->resumen = app(AplicacionCreditoService::class)
             ->previsualizar($this->turno, (int) Auth::id());
+    }
+
+    private function volverATurnos(string $mensaje, string $tipo): void
+    {
+        $notificacion = Notification::make()->title($mensaje);
+
+        $tipo === 'success' ? $notificacion->success() : $notificacion->warning();
+        $notificacion->send();
+
+        $this->redirect(TurnoResource::getUrl('index', panel: 'alumno'));
     }
 }

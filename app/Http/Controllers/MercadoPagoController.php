@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Alumno\Pages\CompletarPagoTurno;
 use App\Models\Pago;
 use App\Models\Turno;
 use App\Services\AplicacionCreditoService;
@@ -10,6 +11,7 @@ use App\Services\CreditoService;
 use App\Services\MercadoPagoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
@@ -109,7 +111,7 @@ class MercadoPagoController extends Controller
     /**
      * Pago desde MAIL (link firmado + alumno_id).
      */
-    public function pagarDesdeMail(Request $request, Turno $turno, MercadoPagoService $mp, AuditLogger $audit)
+    public function pagarDesdeMail(Request $request, Turno $turno)
     {
         $alumnoId = (int) $request->query('alumno_id');
 
@@ -121,90 +123,33 @@ class MercadoPagoController extends Controller
             abort(403, 'No autorizado.');
         }
 
-        return DB::transaction(function () use ($turno, $mp, $audit) {
-            $turno = Turno::query()
-                ->whereKey($turno->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
+        $destino = CompletarPagoTurno::getUrl(
+            ['record' => $turno->id],
+            panel: 'alumno',
+        );
+        $usuarioActual = Auth::user();
 
-            if ($turno->estado === Turno::ESTADO_CANCELADO) {
-                return view('turnos.confirmacion-resultado', [
-                    'titulo' => 'No disponible',
-                    'mensaje' => 'Este turno está cancelado.',
-                ]);
+        if (
+            $usuarioActual
+            && $usuarioActual->role === 'alumno'
+            && (int) $usuarioActual->id === $alumnoId
+        ) {
+            return redirect($destino);
+        }
+
+        foreach (['web', 'alumno', 'profesor', 'admin'] as $guard) {
+            if (array_key_exists($guard, config('auth.guards', []))) {
+                Auth::guard($guard)->logout();
             }
+        }
 
-            if ($turno->estado === Turno::ESTADO_CONFIRMADO) {
-                $audit->log('pago.mail_intento_bloqueado_turno_confirmado', $turno, [
-                    'turno_id' => $turno->id,
-                ]);
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            $request->session()->put('url.intended', $destino);
+        }
 
-                return view('turnos.confirmacion-resultado', [
-                    'titulo' => 'Ya está pagado',
-                    'mensaje' => 'Este turno ya figura como Clase pagada.',
-                ]);
-            }
-
-            $pagoExistente = $turno->pago;
-
-            if ($pagoExistente && $pagoExistente->estado === Pago::ESTADO_APROBADO) {
-                if (
-                    $turno->estado !== Turno::ESTADO_CANCELADO &&
-                    $turno->estado !== Turno::ESTADO_CONFIRMADO
-                ) {
-                    $turno->update(['estado' => Turno::ESTADO_CONFIRMADO]);
-                }
-
-                $audit->log('pago.mail_intento_bloqueado_pago_aprobado', $turno, [
-                    'turno_id' => $turno->id,
-                    'pago_id' => $pagoExistente->pago_id ?? null,
-                    'mp_payment_id' => $pagoExistente->mp_payment_id ?? null,
-                ]);
-
-                return view('turnos.confirmacion-resultado', [
-                    'titulo' => 'Ya está pagado',
-                    'mensaje' => 'Ya registramos un pago aprobado para este turno.',
-                ]);
-            }
-
-            if ($turno->estado !== Turno::ESTADO_PENDIENTE_PAGO) {
-                $audit->log('pago.mail_intento_estado_invalido', $turno, [
-                    'turno_id' => $turno->id,
-                    'estado_turno' => $turno->estado,
-                ]);
-
-                return view('turnos.confirmacion-resultado', [
-                    'titulo' => 'No disponible',
-                    'mensaje' => 'Este turno no está pendiente de pago.',
-                ]);
-            }
-
-            if (
-                $pagoExistente
-                && $pagoExistente->estado === Pago::ESTADO_PENDIENTE
-                && $pagoExistente->mp_init_point
-            ) {
-                $audit->log('pago.mail_reuso_preference', $turno, [
-                    'turno_id' => $turno->id,
-                    'mp_init_point' => $pagoExistente->mp_init_point,
-                ]);
-
-                return redirect()->away($pagoExistente->mp_init_point);
-            }
-
-            $pago = $mp->crearLinkDePagoParaTurno($turno);
-
-            $audit->log('pago.link_creado', $turno, [
-                'turno_id' => $turno->id,
-                'pago_id' => $pago->pago_id ?? null,
-                'monto' => (float) $pago->monto,
-                'moneda' => $pago->moneda,
-                'mp_preference_id' => $pago->mp_preference_id,
-                'mp_init_point' => $pago->mp_init_point,
-            ]);
-
-            return redirect()->away($pago->mp_init_point);
-        });
+        return redirect('/alumno/login');
     }
 
     public function success(Request $request, Turno $turno)
