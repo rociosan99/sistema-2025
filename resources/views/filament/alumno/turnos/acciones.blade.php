@@ -72,18 +72,16 @@
     $horasHastaInicio = $inicioTurno ? $ahora->diffInHours($inicioTurno, false) : -999;
 
     $puedeReprogramar = in_array($estado, [
-        Turno::ESTADO_PENDIENTE,
-        Turno::ESTADO_PENDIENTE_PAGO,
         Turno::ESTADO_CONFIRMADO,
         Turno::ESTADO_CANCELADO,
     ], true) && ! $yaEmpezo && ! $estaVencido && ($horasHastaInicio >= $horasRegla);
 
     $puedeResolverSuspension = $estaSuspendidoProfesor && ! $yaEmpezo;
 
-    $puedeVerEnlace = $estaConfirmado && !empty($enlaceClase);
+    $puedeVerEnlace = $estaConfirmado && ! $yaFinalizo && !empty($enlaceClase);
 @endphp
 
-<div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+<div style="display:flex; max-width:280px; gap:6px; flex-wrap:wrap; align-items:center;">
 
     @if($estaCancelado)
         <span style="font-size:12px; font-weight:800; color:#991b1b;">
@@ -107,7 +105,7 @@
     @endif
 
     @if($estaSuspendidoProfesor)
-        <span style="font-size:12px; font-weight:700; color:#525252; width:100%; max-width:420px;">
+        <span style="font-size:12px; font-weight:700; color:#525252; width:100%; max-width:260px;">
             El pago sigue vigente. Reprogramá con el mismo profesor sin necesidad de pagar de nuevo.
         </span>
     @endif

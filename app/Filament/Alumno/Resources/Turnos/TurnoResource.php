@@ -82,27 +82,33 @@ class TurnoResource extends Resource
                             : ($record->cancelacion_tipo ? 'Suspendida por el alumno' : 'Cancelado'),
                         Turno::ESTADO_VENCIDO => 'Vencido',
                         default => $state ? ucfirst($state) : '-',
-                    }),
+                    })
+                    ->extraCellAttributes(['class' => 'py-3']),
 
                 TextColumn::make('fecha')
                     ->label('Fecha')
-                    ->date()
-                    ->sortable(),
+                    ->date('d/m/Y')
+                    ->extraCellAttributes(['class' => 'py-3']),
 
                 TextColumn::make('hora_inicio')
-                    ->label('Desde')
-                    ->formatStateUsing(fn ($state) => $state ? substr((string) $state, 0, 5) : '-'),
+                    ->label('Horario')
+                    ->formatStateUsing(function ($state, Turno $record): string {
+                        $desde = $record->hora_inicio
+                            ? substr((string) $record->hora_inicio, 0, 5)
+                            : '-';
+                        $hasta = $record->hora_fin
+                            ? substr((string) $record->hora_fin, 0, 5)
+                            : '-';
 
-                TextColumn::make('hora_fin')
-                    ->label('Hasta')
-                    ->formatStateUsing(fn ($state) => $state ? substr((string) $state, 0, 5) : '-'),
+                        return "{$desde} - {$hasta}";
+                    })
+                    ->extraCellAttributes(['class' => 'py-3']),
 
                 TextColumn::make('materia.materia_nombre')
-                    ->label('Materia')
-                    ->placeholder('-'),
-
-                TextColumn::make('tema.tema_nombre')
-                    ->label('Tema')
+                    ->label('Clase')
+                    ->description(fn (Turno $record): ?string => $record->tema?->tema_nombre)
+                    ->wrap()
+                    ->extraCellAttributes(['class' => 'py-3'])
                     ->placeholder('-'),
 
                 TextColumn::make('profesor.name')
@@ -126,6 +132,7 @@ class TurnoResource extends Resource
 
                         return $nombre;
                     })
+                    ->extraCellAttributes(['class' => 'py-3'])
                     ->placeholder('-'),
 
                 ViewColumn::make('acciones')
@@ -134,8 +141,10 @@ class TurnoResource extends Resource
                     ->viewData([
                         'politicaCancelacion' => $politicaCancelacion,
                         'politicaCancelacionError' => $politicaCancelacionError,
-                    ]),
+                    ])
+                    ->extraCellAttributes(['class' => 'py-3']),
             ])
+            ->recordClasses('border-b border-gray-200 dark:border-white/10')
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
             ->filters([
@@ -195,17 +204,17 @@ class TurnoResource extends Resource
                             ->when($data['hasta'] ?? null, fn (Builder $q, $hasta) => $q->whereDate('fecha', '<=', $hasta));
                     }),
             ])
-            ->defaultSort('fecha', 'desc')
             ->emptyStateHeading('No tenés turnos aún')
             ->emptyStateDescription('Solicitá un turno desde el botón "Solicitar turno".');
     }
 
-   public static function getEloquentQuery(): Builder
+    public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
             ->where('alumno_id', Auth::id())
             ->orderByDesc('fecha')
-            ->orderByDesc('hora_inicio');
+            ->orderByDesc('hora_inicio')
+            ->orderByDesc('id');
     }
 
     public static function getPages(): array
