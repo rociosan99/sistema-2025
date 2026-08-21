@@ -5,6 +5,8 @@ namespace App\Filament\Alumno\Pages;
 use App\Jobs\ProcesarReemplazoTurnoCanceladoJob;
 use App\Mail\ProfesorClaseSuspendidaReprogramada;
 use App\Mail\ProfesorTurnoReprogramado;
+use App\Models\CreditoAplicacion;
+use App\Models\Pago;
 use App\Models\Turno;
 use App\Models\User;
 use App\Services\AuditLogger;
@@ -69,8 +71,6 @@ class ReprogramarTurno extends Page
         }
 
         if (! in_array((string) $turno->estado, [
-            Turno::ESTADO_PENDIENTE,
-            Turno::ESTADO_PENDIENTE_PAGO,
             Turno::ESTADO_CONFIRMADO,
             Turno::ESTADO_SUSPENDIDO_PROFESOR,
             Turno::ESTADO_CANCELADO,
@@ -95,6 +95,21 @@ class ReprogramarTurno extends Page
                 return;
             }
         } else {
+            if ($turno->estado === Turno::ESTADO_CONFIRMADO && ! $turno->pago?->estaAprobado()) {
+                $this->errorMensaje = 'No se puede reprogramar porque el turno no tiene un pago aprobado.';
+                return;
+            }
+
+            if (
+                $turno->estado === Turno::ESTADO_CANCELADO
+                && (empty($turno->cancelacion_tipo) || $turno->reprogramado_por_turno_id !== null)
+            ) {
+                $this->errorMensaje = $turno->reprogramado_por_turno_id !== null
+                    ? 'Este turno ya fue reprogramado.'
+                    : 'Este turno cancelado no corresponde a una suspensión del alumno.';
+                return;
+            }
+
             $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
             $horasHastaInicio = now()->diffInHours($turno->inicioDateTime(), false);
 
@@ -168,6 +183,8 @@ class ReprogramarTurno extends Page
         $turnoOriginalId = (int) $this->turnoOriginal->id;
         $nuevoTurnoId = null;
         $slotHoldOriginalId = null;
+        $pagoTrasladadoId = null;
+        $aplicacionesCreditoTrasladadas = 0;
 
         $estadoOriginalAntes = (string) $this->turnoOriginal->estado;
         $profesorOriginalId = (int) $this->turnoOriginal->profesor_id;
@@ -287,11 +304,61 @@ class ReprogramarTurno extends Page
             $slot,
             &$nuevoTurnoId,
             &$slotHoldOriginalId,
+            &$pagoTrasladadoId,
+            &$aplicacionesCreditoTrasladadas,
             $turnoOriginalId,
             $alumnoExcluidoId
         ) {
+            $turnoBloqueado = Turno::query()
+                ->whereKey($turnoOriginalId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ((int) $turnoBloqueado->alumno_id !== (int) Auth::id()) {
+                abort(404);
+            }
+
+            if (! in_array((string) $turnoBloqueado->estado, [
+                Turno::ESTADO_CONFIRMADO,
+                Turno::ESTADO_CANCELADO,
+            ], true)) {
+                throw ValidationException::withMessages([
+                    'turno' => 'Este turno no se puede reprogramar.',
+                ]);
+            }
+
+            if (
+                $turnoBloqueado->estado === Turno::ESTADO_CANCELADO
+                && empty($turnoBloqueado->cancelacion_tipo)
+            ) {
+                throw ValidationException::withMessages([
+                    'turno' => 'Este turno cancelado no corresponde a una suspensión del alumno.',
+                ]);
+            }
+
+            if ($turnoBloqueado->reprogramado_por_turno_id !== null) {
+                throw ValidationException::withMessages([
+                    'turno' => 'Este turno ya fue reprogramado.',
+                ]);
+            }
+
+            $pagoAprobado = null;
+
+            if ($turnoBloqueado->estado === Turno::ESTADO_CONFIRMADO) {
+                $pagoAprobado = Pago::query()
+                    ->where('turno_id', $turnoBloqueado->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $pagoAprobado?->estaAprobado()) {
+                    throw ValidationException::withMessages([
+                        'turno' => 'No se puede reprogramar porque el turno no tiene un pago aprobado.',
+                    ]);
+                }
+            }
+
             $horasRegla = (int) config('turnos.cancelacion_sin_cargo_horas', 24);
-            $horasHastaInicio = now()->diffInHours($this->turnoOriginal->inicioDateTime(), false);
+            $horasHastaInicio = now()->diffInHours($turnoBloqueado->inicioDateTime(), false);
 
             if ($horasHastaInicio < $horasRegla) {
                 throw ValidationException::withMessages([
@@ -334,28 +401,44 @@ class ReprogramarTurno extends Page
                 ]);
             }
 
-            $estadoNuevo = $this->turnoOriginal->estado === Turno::ESTADO_CONFIRMADO
+            $estadoNuevo = $turnoBloqueado->estado === Turno::ESTADO_CONFIRMADO
                 ? Turno::ESTADO_CONFIRMADO
                 : Turno::ESTADO_PENDIENTE_PAGO;
 
             $nuevo = Turno::create([
-                'alumno_id' => $this->turnoOriginal->alumno_id,
+                'alumno_id' => $turnoBloqueado->alumno_id,
                 'profesor_id' => $profesorActivo->id,
-                'materia_id' => $this->turnoOriginal->materia_id,
-                'tema_id' => $this->turnoOriginal->tema_id,
+                'materia_id' => $turnoBloqueado->materia_id,
+                'tema_id' => $turnoBloqueado->tema_id,
                 'fecha' => $slot['fecha'],
                 'hora_inicio' => $slot['hora_inicio'],
                 'hora_fin' => $slot['hora_fin'],
                 'estado' => $estadoNuevo,
-                'precio_por_hora' => $slot['precio_por_hora'] ?? $this->turnoOriginal->precio_por_hora,
-                'precio_total' => $slot['precio_total'] ?? $this->turnoOriginal->precio_total,
+                'precio_por_hora' => $slot['precio_por_hora'] ?? $turnoBloqueado->precio_por_hora,
+                'precio_total' => $slot['precio_total'] ?? $turnoBloqueado->precio_total,
             ]);
 
             $nuevoTurnoId = (int) $nuevo->id;
 
-            $this->turnoOriginal->refresh();
+            if ($pagoAprobado) {
+                $aplicacionesCredito = CreditoAplicacion::query()
+                    ->where('turno_id', $turnoBloqueado->id)
+                    ->lockForUpdate()
+                    ->get();
 
-            $this->turnoOriginal->update([
+                $pagoAprobado->update(['turno_id' => $nuevo->id]);
+                $pagoTrasladadoId = (int) $pagoAprobado->pago_id;
+
+                if ($aplicacionesCredito->isNotEmpty()) {
+                    CreditoAplicacion::query()
+                        ->whereKey($aplicacionesCredito->modelKeys())
+                        ->update(['turno_id' => $nuevo->id]);
+
+                    $aplicacionesCreditoTrasladadas = $aplicacionesCredito->count();
+                }
+            }
+
+            $turnoBloqueado->update([
                 'estado' => Turno::ESTADO_CANCELADO,
                 'cancelado_at' => now(),
                 'cancelacion_tipo' => 'sin_cargo',
@@ -363,7 +446,7 @@ class ReprogramarTurno extends Page
                 'reprogramado_at' => now(),
             ]);
 
-            $turnoOriginalCancelado = $this->turnoOriginal->fresh();
+            $turnoOriginalCancelado = $turnoBloqueado->fresh();
 
             $slotHoldOriginalId = $this->slotService->crearHoldDesdeTurnoCanceladoParaReemplazo(
                 $turnoOriginalCancelado,
@@ -386,6 +469,8 @@ class ReprogramarTurno extends Page
         $turnoOriginal = Turno::with(['profesor', 'alumno', 'materia', 'tema'])
             ->whereKey($turnoOriginalId)
             ->first();
+
+        $this->turnoOriginal = $turnoOriginal;
 
         $turnoNuevo = $nuevoTurnoId
             ? Turno::with(['profesor', 'alumno', 'materia', 'tema'])
@@ -416,6 +501,8 @@ class ReprogramarTurno extends Page
                 'reemplazo_busqueda_disparada' => true,
                 'alumno_excluido_reemplazo_id' => $alumnoExcluidoId,
                 'motivo_recuperacion_hueco' => 'reprogramacion_sin_cargo',
+                'pago_trasladado_id' => $pagoTrasladadoId,
+                'aplicaciones_credito_trasladadas' => $aplicacionesCreditoTrasladadas,
             ]);
         }
 

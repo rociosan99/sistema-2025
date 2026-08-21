@@ -146,7 +146,11 @@ class TurnoResource extends Resource
             ])
             ->recordClasses('border-b border-gray-200 dark:border-white/10')
             ->filtersLayout(FiltersLayout::AboveContent)
-            ->filtersFormColumns(3)
+            ->filtersFormColumns([
+                'default' => 1,
+                'md' => 2,
+                'lg' => 6,
+            ])
             ->filters([
                 Tables\Filters\SelectFilter::make('estado')
                     ->label('Estado')
@@ -160,6 +164,7 @@ class TurnoResource extends Resource
                         Turno::ESTADO_VENCIDO        => 'Vencido',
                         Turno::ESTADO_ACEPTADO       => 'Aceptado (legacy)',
                     ])
+                    ->columnSpan(['default' => 1, 'lg' => 2])
                     ->native(false),
 
                 Tables\Filters\SelectFilter::make('materia_id')
@@ -167,6 +172,7 @@ class TurnoResource extends Resource
                     ->relationship('materia', 'materia_nombre')
                     ->searchable()
                     ->preload()
+                    ->columnSpan(['default' => 1, 'lg' => 2])
                     ->native(false),
 
                 Tables\Filters\SelectFilter::make('profesor_id')
@@ -190,6 +196,7 @@ class TurnoResource extends Resource
                     })
                     ->searchable()
                     ->preload()
+                    ->columnSpan(['default' => 1, 'lg' => 2])
                     ->native(false),
 
                 Tables\Filters\Filter::make('rango_fechas')
@@ -198,6 +205,11 @@ class TurnoResource extends Resource
                         DatePicker::make('desde')->label('Desde'),
                         DatePicker::make('hasta')->label('Hasta'),
                     ])
+                    ->columns([
+                        'default' => 1,
+                        'sm' => 2,
+                    ])
+                    ->columnSpan(['default' => 1, 'md' => 2, 'lg' => 4])
                     ->query(function (Builder $query, array $data) {
                         return $query
                             ->when($data['desde'] ?? null, fn (Builder $q, $desde) => $q->whereDate('fecha', '>=', $desde))
