@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Alumno\Pages\SuspensionCompletada;
 use App\Jobs\ProcesarReemplazoTurnoCanceladoJob;
 use App\Models\SlotHold;
 use App\Models\Turno;
@@ -191,9 +192,15 @@ class TurnoCancelarPanelController extends Controller
                 'cancelacion_tipo' => $resultado['tipo_cancelacion'],
             ]);
 
-            return back()->with('success', 'Clase suspendida con penalización. Se buscará un reemplazo.');
+            return redirect()->to(SuspensionCompletada::getUrl(
+                ['record' => $turno->id],
+                panel: 'alumno',
+            ));
         }
 
-        return back()->with('success', 'Clase suspendida sin penalización. Si querés, podés reprogramar desde el botón Reprogramar.');
+        return redirect()->to(SuspensionCompletada::getUrl(
+            ['record' => $turno->id],
+            panel: 'alumno',
+        ));
     }
 }

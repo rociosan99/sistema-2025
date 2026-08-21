@@ -73,7 +73,6 @@
 
     $puedeReprogramar = in_array($estado, [
         Turno::ESTADO_CONFIRMADO,
-        Turno::ESTADO_CANCELADO,
     ], true) && ! $yaEmpezo && ! $estaVencido && ($horasHastaInicio >= $horasRegla);
 
     $puedeResolverSuspension = $estaSuspendidoProfesor && ! $yaEmpezo;
