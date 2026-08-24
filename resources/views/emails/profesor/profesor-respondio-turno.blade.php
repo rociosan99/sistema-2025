@@ -13,6 +13,7 @@
         $estado = (string) $turno->estado;
 
         $estadoTexto = match ($estado) {
+            \App\Models\Turno::ESTADO_ACEPTADO => 'aceptó tu solicitud y envió una propuesta para que la revises',
             \App\Models\Turno::ESTADO_PENDIENTE_PAGO => 'aceptó tu solicitud (queda pendiente de pago)',
             \App\Models\Turno::ESTADO_RECHAZADO => 'rechazó tu solicitud',
             default => 'actualizó el estado de tu solicitud',
@@ -37,7 +38,9 @@
         <li><strong>Estado actual:</strong> {{ ucfirst($estado) }}</li>
     </ul>
 
-    @if($estado === \App\Models\Turno::ESTADO_PENDIENTE_PAGO)
+    @if($estado === \App\Models\Turno::ESTADO_ACEPTADO)
+        <p>Ingresá al panel para <strong>revisar la propuesta</strong>. El pago se habilitará solamente si decidís aceptarla.</p>
+    @elseif($estado === \App\Models\Turno::ESTADO_PENDIENTE_PAGO)
         <p>Ya podés ingresar al panel para <strong>realizar el pago</strong>.</p>
     @elseif($estado === \App\Models\Turno::ESTADO_RECHAZADO)
         <p>Podés solicitar otro turno en un horario diferente.</p>
@@ -48,7 +51,11 @@
     <p style="margin-top: 12px;">
         <a href="{{ $urlPanelAlumno }}"
            style="display:inline-block; padding:10px 14px; background:#16a34a; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:700;">
-            {{ $estado === \App\Models\Turno::ESTADO_PENDIENTE_PAGO ? 'Completar pago' : 'Ir a mis turnos' }}
+            {{ match ($estado) {
+                \App\Models\Turno::ESTADO_ACEPTADO => 'Revisar propuesta',
+                \App\Models\Turno::ESTADO_PENDIENTE_PAGO => 'Completar pago',
+                default => 'Ir a mis turnos',
+            } }}
         </a>
     </p>
 

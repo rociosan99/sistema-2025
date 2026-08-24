@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Filament\Alumno\Pages\ResponderOfertaProfesor;
 use App\Models\Turno;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -21,12 +22,42 @@ class ProfesorRespondioTurno extends Mailable
     {
         $this->turno = $turno->loadMissing(['alumno', 'profesor', 'materia', 'tema']);
 
-        $this->urlPanelAlumno = $this->turno->estado === Turno::ESTADO_PENDIENTE_PAGO
-            ? URL::signedRoute('mp.pagar.mail', [
+        if ($this->turno->estado === Turno::ESTADO_ACEPTADO) {
+            $detalleUrl = ResponderOfertaProfesor::getUrl(
+                ['record' => $this->turno->id],
+                panel: 'alumno',
+            );
+
+            $destino = parse_url($detalleUrl, PHP_URL_PATH);
+
+            if (! is_string($destino) || $destino === '') {
+                throw new \RuntimeException('No se pudo generar el destino de la propuesta.');
+            }
+
+            $venceEn = now()->addDays(7);
+            $inicioTurno = $this->turno->inicioDateTime();
+
+            if ($inicioTurno->lt($venceEn)) {
+                $venceEn = $inicioTurno;
+            }
+
+            $this->urlPanelAlumno = URL::temporarySignedRoute(
+                'mail.access',
+                $venceEn,
+                [
+                    'panel' => 'alumno',
+                    'alumno' => (int) $this->turno->alumno_id,
+                    'target' => base64_encode($destino),
+                ],
+            );
+        } elseif ($this->turno->estado === Turno::ESTADO_PENDIENTE_PAGO) {
+            $this->urlPanelAlumno = URL::signedRoute('mp.pagar.mail', [
                 'turno' => $this->turno->id,
                 'alumno_id' => $this->turno->alumno_id,
-            ])
-            : url('/alumno/turnos');
+            ]);
+        } else {
+            $this->urlPanelAlumno = url('/alumno/turnos');
+        }
     }
 
     public function envelope(): Envelope
