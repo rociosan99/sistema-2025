@@ -55,6 +55,7 @@ class MiPerfilProfesor extends Page
     public ?string $nivel = null;
     public ?float $precio_por_hora_default = null;
     public ?string $titulo_profesional = null;
+    public ?string $enlace_clase_default = null;
 
     public string $materiaQuery = '';
     public array $materiaResultados = [];
@@ -107,6 +108,7 @@ class MiPerfilProfesor extends Page
             ? (float) $profile->precio_por_hora_default
             : null;
         $this->titulo_profesional = $profile->titulo_profesional;
+        $this->enlace_clase_default = $profile->enlace_clase_default;
 
         $this->materiasIds = $user->materias()
             ->pluck('materias.materia_id')
@@ -518,6 +520,11 @@ class MiPerfilProfesor extends Page
             ]);
         }
 
+        $enlaceClaseDefault = trim((string) $this->enlace_clase_default);
+        $this->enlace_clase_default = $enlaceClaseDefault !== ''
+            ? $enlaceClaseDefault
+            : null;
+
         $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'apellido' => ['required', 'string', 'max:255'],
@@ -532,6 +539,7 @@ class MiPerfilProfesor extends Page
             'nivel' => ['nullable', 'in:junior,semi,senior'],
             'precio_por_hora_default' => ['nullable', 'numeric', 'min:0'],
             'titulo_profesional' => ['nullable', 'string', 'max:180'],
+            'enlace_clase_default' => ['required', 'url:http,https', 'max:2048'],
 
             'materiasIds' => ['array'],
             'materiasIds.*' => ['integer'],
@@ -543,6 +551,8 @@ class MiPerfilProfesor extends Page
             'pais_id.required' => 'Seleccioná un país.',
             'provincia_id.required' => 'Seleccioná una provincia.',
             'ciudad_id.required' => 'Seleccioná una ciudad.',
+            'enlace_clase_default.required' => 'El enlace de clase es obligatorio.',
+            'enlace_clase_default.url' => 'Ingresá un enlace válido que comience con http:// o https://.',
         ]);
 
         $provinciaValida = Provincia::query()
@@ -604,6 +614,7 @@ class MiPerfilProfesor extends Page
             $profile->nivel = $this->nivel;
             $profile->precio_por_hora_default = $this->precio_por_hora_default;
             $profile->titulo_profesional = $this->titulo_profesional;
+            $profile->enlace_clase_default = $this->enlace_clase_default;
             $profile->save();
 
             $user->materias()->sync($syncMaterias);

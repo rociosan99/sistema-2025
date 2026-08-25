@@ -157,20 +157,9 @@
     <x-filament::modal id="modal-aceptar-oferta">
         <form wire:submit.prevent="aceptar">
             <div class="space-y-4 p-4">
-                <div>
-                    <label for="enlace-clase" class="block text-sm font-semibold text-gray-950 dark:text-white">Enlace de la clase</label>
-                    <input
-                        id="enlace-clase"
-                        type="url"
-                        wire:model="enlaceClase"
-                        placeholder="https://meet.google.com/..."
-                        class="mt-2 block w-full rounded-lg border-gray-300 bg-white text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-white/10 dark:bg-white/5 dark:text-white"
-                        required
-                    >
-                    @error('enlaceClase')
-                        <p class="mt-1 text-sm text-danger-600">{{ $message }}</p>
-                    @enderror
-                </div>
+                <p class="text-sm text-gray-600 dark:text-gray-300">
+                    Se utilizará el enlace de clase predeterminado configurado en Mi perfil.
+                </p>
 
                 <div class="flex justify-end">
                     <x-filament::button type="submit">Confirmar</x-filament::button>

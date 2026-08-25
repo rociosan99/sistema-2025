@@ -7,13 +7,13 @@ use App\Models\Turno;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Validator;
 
 class TurnoRespuestaProfesorService
 {
-    public function __construct(private readonly AuditLogger $audit)
-    {
-    }
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly EnlaceClaseProfesorService $enlaceClaseProfesorService,
+    ) {}
 
     public function puedeResponder(Turno $turno, int $profesorId): bool
     {
@@ -49,14 +49,9 @@ class TurnoRespuestaProfesorService
         return $fueMarcado;
     }
 
-    public function aceptar(Turno $turno, int $profesorId, string $enlaceClase): ?Turno
+    public function aceptar(Turno $turno, int $profesorId): ?Turno
     {
-        $datos = Validator::make(
-            ['enlace_clase' => $enlaceClase],
-            ['enlace_clase' => ['required', 'url', 'max:2048']],
-        )->validate();
-
-        $turnoActualizado = DB::transaction(function () use ($turno, $profesorId, $datos): ?Turno {
+        $turnoActualizado = DB::transaction(function () use ($turno, $profesorId): ?Turno {
             $turnoBloqueado = $this->buscarTurnoBloqueado((int) $turno->getKey(), $profesorId);
 
             if ($this->marcarComoVencidoBloqueado($turnoBloqueado)) {
@@ -67,11 +62,12 @@ class TurnoRespuestaProfesorService
                 return null;
             }
 
+            $enlaceClase = $this->enlaceClaseProfesorService->obtenerPredeterminado($profesorId);
             $estadoAntes = (string) $turnoBloqueado->estado;
 
             $turnoBloqueado->update([
                 'estado' => Turno::ESTADO_PENDIENTE_PAGO,
-                'enlace_clase' => trim((string) $datos['enlace_clase']),
+                'enlace_clase' => $enlaceClase,
             ]);
 
             $turnoBloqueado->loadMissing(['alumno', 'profesor', 'materia', 'tema']);

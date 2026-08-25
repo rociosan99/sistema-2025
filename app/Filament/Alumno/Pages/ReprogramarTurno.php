@@ -10,6 +10,7 @@ use App\Models\Pago;
 use App\Models\Turno;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\EnlaceClaseProfesorService;
 use App\Services\ReemplazoProfesorService;
 use App\Services\SlotService;
 use BackedEnum;
@@ -39,10 +40,14 @@ class ReprogramarTurno extends Page
     public ?string $errorMensaje = null;
 
     protected SlotService $slotService;
+    protected EnlaceClaseProfesorService $enlaceClaseProfesorService;
 
-    public function boot(SlotService $slotService): void
-    {
+    public function boot(
+        SlotService $slotService,
+        EnlaceClaseProfesorService $enlaceClaseProfesorService,
+    ): void {
         $this->slotService = $slotService;
+        $this->enlaceClaseProfesorService = $enlaceClaseProfesorService;
     }
 
     public function mount(): void
@@ -405,6 +410,10 @@ class ReprogramarTurno extends Page
                 ? Turno::ESTADO_CONFIRMADO
                 : Turno::ESTADO_PENDIENTE_PAGO;
 
+            $enlaceClase = (int) $profesorActivo->id === (int) $turnoBloqueado->profesor_id
+                ? $turnoBloqueado->enlace_clase
+                : $this->enlaceClaseProfesorService->obtenerPredeterminado((int) $profesorActivo->id);
+
             $nuevo = Turno::create([
                 'alumno_id' => $turnoBloqueado->alumno_id,
                 'profesor_id' => $profesorActivo->id,
@@ -414,6 +423,7 @@ class ReprogramarTurno extends Page
                 'hora_inicio' => $slot['hora_inicio'],
                 'hora_fin' => $slot['hora_fin'],
                 'estado' => $estadoNuevo,
+                'enlace_clase' => $enlaceClase,
                 'precio_por_hora' => $slot['precio_por_hora'] ?? $turnoBloqueado->precio_por_hora,
                 'precio_total' => $slot['precio_total'] ?? $turnoBloqueado->precio_total,
             ]);

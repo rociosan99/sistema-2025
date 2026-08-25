@@ -27,6 +27,9 @@ class ResolverPropuestaReemplazo extends Page
     public int $calificacionesCantidad = 0;
     public bool $propuestaVigente = false;
     public ?string $mensajeEstado = null;
+    public bool $mostrarAlertaCorregible = false;
+    public ?string $mensajeAlertaCorregible = null;
+    public bool $mostrarModalExito = false;
 
     public function mount(int|string $record): void
     {
@@ -47,19 +50,17 @@ class ResolverPropuestaReemplazo extends Page
             $turno = Turno::query()->findOrFail($this->turno->getKey());
 
             $reemplazoService->aceptar($turno, (int) Auth::id());
-        } catch (ValidationException|HttpExceptionInterface) {
+        } catch (ValidationException $exception) {
+            $this->mostrarErrorValidacion($exception);
+
+            return;
+        } catch (HttpExceptionInterface) {
             $this->marcarNoDisponible();
 
             return;
         }
 
-        Notification::make()
-            ->title('Propuesta aceptada')
-            ->body('La clase ya fue incorporada a tus turnos confirmados.')
-            ->success()
-            ->send();
-
-        $this->redirect(Dashboard::getUrl(panel: 'profesor'));
+        $this->mostrarModalExito = true;
     }
 
     public function rechazar(ReemplazoProfesorService $reemplazoService): void
@@ -68,7 +69,11 @@ class ResolverPropuestaReemplazo extends Page
             $turno = Turno::query()->findOrFail($this->turno->getKey());
 
             $reemplazoService->rechazar($turno, (int) Auth::id());
-        } catch (ValidationException|HttpExceptionInterface) {
+        } catch (ValidationException $exception) {
+            $this->mostrarErrorValidacion($exception);
+
+            return;
+        } catch (HttpExceptionInterface) {
             $this->marcarNoDisponible();
 
             return;
@@ -116,6 +121,45 @@ class ResolverPropuestaReemplazo extends Page
             ->body('No se realizó ningún cambio en el turno.')
             ->warning()
             ->send();
+    }
+
+    private function mostrarErrorValidacion(ValidationException $exception): void
+    {
+        $turnoActual = Turno::query()->find($this->turno?->getKey());
+
+        if (! $turnoActual || ! $this->propuestaSigueVigente($turnoActual)) {
+            $this->marcarNoDisponible();
+
+            return;
+        }
+
+        $this->turno = $this->consultarTurno($turnoActual->getKey());
+        $this->propuestaVigente = true;
+        $this->mensajeEstado = null;
+        $this->mensajeAlertaCorregible = (string) collect($exception->errors())
+            ->flatten()
+            ->first();
+        $this->mostrarAlertaCorregible = true;
+    }
+
+    public function cerrarAlertaCorregible(): void
+    {
+        $this->mostrarAlertaCorregible = false;
+        $this->mensajeAlertaCorregible = null;
+    }
+
+    public function continuarDespuesDeAceptar(): void
+    {
+        $this->mostrarModalExito = false;
+        $this->redirect(Dashboard::getUrl(panel: 'profesor'));
+    }
+
+    private function propuestaSigueVigente(Turno $turno): bool
+    {
+        return $turno->estado === Turno::ESTADO_SUSPENDIDO_PROFESOR
+            && (int) $turno->reemplazo_profesor_propuesto_id === (int) Auth::id()
+            && $turno->reemplazo_expires_at !== null
+            && $turno->reemplazo_expires_at->isFuture();
     }
 
     private function consultarTurno(int|string $record): Turno

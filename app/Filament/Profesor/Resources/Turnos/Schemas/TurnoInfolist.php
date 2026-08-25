@@ -7,12 +7,14 @@ use App\Models\Turno;
 use App\Services\TurnoRespuestaProfesorService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Actions;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class TurnoInfolist
 {
@@ -112,22 +114,23 @@ class TurnoInfolist
                                     Action::make('aceptar')
                                         ->label('Aceptar')
                                         ->color('primary')
-                                        ->form([
-                                            TextInput::make('enlace_clase')
-                                                ->label('Enlace de la clase')
-                                                ->placeholder('https://meet.google.com/... o https://zoom.us/...')
-                                                ->required()
-                                                ->url()
-                                                ->maxLength(2048),
-                                        ])
                                         ->visible(fn (Turno $record): bool => app(TurnoRespuestaProfesorService::class)
                                             ->puedeResponder($record, (int) Auth::id()))
-                                        ->action(function (Turno $record, array $data): void {
-                                            app(TurnoRespuestaProfesorService::class)->aceptar(
-                                                $record,
-                                                (int) Auth::id(),
-                                                (string) $data['enlace_clase'],
-                                            );
+                                        ->action(function (Turno $record): void {
+                                            try {
+                                                app(TurnoRespuestaProfesorService::class)->aceptar(
+                                                    $record,
+                                                    (int) Auth::id(),
+                                                );
+                                            } catch (ValidationException $exception) {
+                                                Notification::make()
+                                                    ->title('No se pudo aceptar la clase')
+                                                    ->body(collect($exception->errors())->flatten()->first())
+                                                    ->warning()
+                                                    ->send();
+
+                                                return;
+                                            }
 
                                             $record->refresh();
                                         }),

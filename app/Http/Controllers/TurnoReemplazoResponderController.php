@@ -147,6 +147,7 @@ class TurnoReemplazoResponderController extends Controller
                 'hora_inicio'     => $invLocked->hora_inicio,
                 'hora_fin'        => $invLocked->hora_fin,
                 'estado'          => Turno::ESTADO_PENDIENTE_PAGO,
+                'enlace_clase'    => $turnoCanceladoLocked->enlace_clase,
                 'precio_por_hora' => $turnoCanceladoLocked->precio_por_hora,
                 'precio_total'    => $turnoCanceladoLocked->precio_total,
             ]);

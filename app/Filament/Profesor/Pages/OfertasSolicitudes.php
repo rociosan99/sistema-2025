@@ -9,6 +9,7 @@ use App\Models\OfertaSolicitud;
 use App\Models\SolicitudDisponibilidad;
 use App\Models\Turno;
 use App\Models\User;
+use App\Services\EnlaceClaseProfesorService;
 use App\Services\SolicitudMatchingService;
 use BackedEnum;
 use Carbon\Carbon;
@@ -41,8 +42,6 @@ class OfertasSolicitudes extends Page
     public array $materiasOptions = [];
 
     // 🔥 enlace del modal
-    public ?string $enlaceClase = null;
-
     public ?int $ofertaSeleccionada = null;
 
     public function mount(): void
@@ -196,10 +195,12 @@ class OfertasSolicitudes extends Page
     }
 
     // ✅ SIN parámetros raros
-    public function aceptar(SolicitudMatchingService $matchingService): void
+    public function aceptar(
+        SolicitudMatchingService $matchingService,
+        EnlaceClaseProfesorService $enlaceClaseProfesorService,
+    ): void
     {
         $this->validate([
-            'enlaceClase' => ['required', 'url', 'max:2048'],
             'ofertaSeleccionada' => ['required', 'integer'],
         ]);
 
@@ -217,6 +218,7 @@ class OfertasSolicitudes extends Page
                 $profesorId,
                 $ofertaReferencia,
                 $matchingService,
+                $enlaceClaseProfesorService,
             ): Turno {
                 // La solicitud es el punto comÃºn entre todos los profesores candidatos.
                 // Bloquearla primero garantiza que solamente uno pueda ganarla.
@@ -322,6 +324,8 @@ class OfertasSolicitudes extends Page
                     ]);
                 }
 
+                $enlaceClase = $enlaceClaseProfesorService->obtenerPredeterminado($profesorId);
+
                 $turno = Turno::create([
                     'alumno_id' => $solicitud->alumno_id,
                     'profesor_id' => $profesorId,
@@ -331,7 +335,7 @@ class OfertasSolicitudes extends Page
                     'hora_inicio' => $slotInicio,
                     'hora_fin' => $slotFin,
                     'estado' => Turno::ESTADO_ACEPTADO,
-                    'enlace_clase' => trim((string) $this->enlaceClase),
+                    'enlace_clase' => $enlaceClase,
                     'precio_por_hora' => round((float) $precioPorHora, 2),
                     'precio_total' => $precioTotal,
                 ]);
@@ -371,7 +375,6 @@ class OfertasSolicitudes extends Page
                 ->send(new ProfesorRespondioTurno($turno));
         }
 
-        $this->enlaceClase = null;
         $this->ofertaSeleccionada = null;
 
         Notification::make()
@@ -385,7 +388,6 @@ class OfertasSolicitudes extends Page
     public function abrirModal(int $id): void
     {
         $this->ofertaSeleccionada = $id;
-        $this->enlaceClase = null;
     }
 
     public function rechazar(int $id): void

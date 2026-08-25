@@ -3,12 +3,14 @@
 namespace App\Filament\Profesor\Resources\Turnos\Tables;
 
 use App\Mail\AlumnoClaseSuspendidaPorProfesor;
+use App\Models\Pago;
 use App\Models\Turno;
 use App\Services\AuditLogger;
 use App\Services\TurnoRespuestaProfesorService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -17,6 +19,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 
 class TurnosTable
 {
@@ -63,6 +66,13 @@ class TurnosTable
                         'gray'    => Turno::ESTADO_VENCIDO,
                     ])
                     ->formatStateUsing(function ($state, Turno $record) {
+                        if (
+                            $state === Turno::ESTADO_CONFIRMADO
+                            && now()->gte($record->finDateTime())
+                        ) {
+                            return 'Finalizada';
+                        }
+
                         if (
                             in_array((string) $state, [Turno::ESTADO_PENDIENTE, Turno::ESTADO_PENDIENTE_PAGO], true)
                             && app(TurnoRespuestaProfesorService::class)->estaVencido($record)
@@ -159,62 +169,23 @@ class TurnosTable
                 Action::make('aceptar')
                     ->label('Aceptar')
                     ->color('primary')
-                    ->form([
-                        TextInput::make('enlace_clase')
-                            ->label('Enlace de la clase')
-                            ->placeholder('https://meet.google.com/... o https://zoom.us/...')
-                            ->required()
-                            ->url()
-                            ->maxLength(2048),
-                    ])
                     ->visible(fn (Turno $record) =>
                         app(TurnoRespuestaProfesorService::class)
                             ->puedeResponder($record, (int) Auth::id())
                     )
-                    ->action(function (Turno $record, array $data) {
-                        app(TurnoRespuestaProfesorService::class)->aceptar(
-                            $record,
-                            (int) Auth::id(),
-                            (string) $data['enlace_clase'],
-                        );
-                    }),
-
-                Action::make('editarEnlace')
-                    ->label('Editar enlace')
-                    ->color('gray')
-                    ->form([
-                        TextInput::make('enlace_clase')
-                            ->label('Enlace de la clase')
-                            ->placeholder('https://meet.google.com/... o https://zoom.us/...')
-                            ->required()
-                            ->url()
-                            ->maxLength(2048)
-                            ->default(fn (Turno $record) => $record->enlace_clase),
-                    ])
-                    ->visible(fn (Turno $record) =>
-                        in_array($record->estado, [
-                            Turno::ESTADO_PENDIENTE_PAGO,
-                            Turno::ESTADO_CONFIRMADO,
-                            Turno::ESTADO_ACEPTADO,
-                        ], true)
-                    )
-                    ->action(function (Turno $record, array $data) {
-                        /** @var AuditLogger $audit */
-                        $audit = app(AuditLogger::class);
-
-                        $enlaceAnterior = $record->enlace_clase;
-
-                        $record->update([
-                            'enlace_clase' => trim((string) $data['enlace_clase']),
-                        ]);
-
-                        $audit->log('turno.enlace_clase_actualizado', $record, [
-                            'turno_id' => $record->id,
-                            'profesor_id' => $record->profesor_id,
-                            'alumno_id' => $record->alumno_id,
-                            'enlace_anterior' => $enlaceAnterior,
-                            'enlace_nuevo' => $record->enlace_clase,
-                        ]);
+                    ->action(function (Turno $record) {
+                        try {
+                            app(TurnoRespuestaProfesorService::class)->aceptar(
+                                $record,
+                                (int) Auth::id(),
+                            );
+                        } catch (ValidationException $exception) {
+                            Notification::make()
+                                ->title('No se pudo aceptar la clase')
+                                ->body(collect($exception->errors())->flatten()->first())
+                                ->warning()
+                                ->send();
+                        }
                     }),
 
                 Action::make('suspender')
@@ -228,43 +199,82 @@ class TurnosTable
                             ->maxLength(1000)
                             ->placeholder('Describe brevemente por qué se suspende la clase'),
                     ])
-                    ->visible(fn (Turno $record) =>
-                        $record->estado === Turno::ESTADO_CONFIRMADO &&
-                        ! app(TurnoRespuestaProfesorService::class)->estaVencido($record)
-                    )
+                    ->visible(fn (Turno $record): bool => self::puedeSuspender(
+                        $record,
+                        (int) Auth::id(),
+                    ))
                     ->action(function (Turno $record, array $data) {
-                        if ($record->estado !== Turno::ESTADO_CONFIRMADO) {
+                        $profesorId = (int) Auth::id();
+
+                        try {
+                            $turnoSuspendido = DB::transaction(function () use ($record, $data, $profesorId): Turno {
+                                $turnoBloqueado = Turno::query()
+                                    ->whereKey($record->getKey())
+                                    ->where('profesor_id', $profesorId)
+                                    ->lockForUpdate()
+                                    ->first();
+
+                                if (! $turnoBloqueado) {
+                                    throw ValidationException::withMessages([
+                                        'turno' => 'La clase no pertenece al profesor autenticado.',
+                                    ]);
+                                }
+
+                                $pagoAprobado = Pago::query()
+                                    ->where('turno_id', $turnoBloqueado->getKey())
+                                    ->where('estado', Pago::ESTADO_APROBADO)
+                                    ->lockForUpdate()
+                                    ->first(['pago_id']);
+
+                                if (
+                                    $turnoBloqueado->estado !== Turno::ESTADO_CONFIRMADO
+                                    || ! $pagoAprobado
+                                    || now()->gte($turnoBloqueado->finDateTime())
+                                ) {
+                                    throw ValidationException::withMessages([
+                                        'turno' => 'Esta clase ya no puede suspenderse.',
+                                    ]);
+                                }
+
+                                /** @var AuditLogger $audit */
+                                $audit = app(AuditLogger::class);
+                                $estadoAntes = (string) $turnoBloqueado->estado;
+
+                                $turnoBloqueado->update([
+                                    'estado' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
+                                    'suspendido_at' => now(),
+                                    'suspendido_por_id' => $profesorId,
+                                    'suspension_motivo' => trim((string) $data['suspension_motivo']),
+                                ]);
+
+                                $audit->log('turno.suspendido_profesor', $turnoBloqueado, [
+                                    'turno_id' => $turnoBloqueado->id,
+                                    'profesor_id' => $turnoBloqueado->profesor_id,
+                                    'alumno_id' => $turnoBloqueado->alumno_id,
+                                    'estado_anterior' => $estadoAntes,
+                                    'estado_nuevo' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
+                                    'suspendido_por_id' => $profesorId,
+                                    'suspension_motivo' => $turnoBloqueado->suspension_motivo,
+                                    'fecha' => (string) $turnoBloqueado->fecha,
+                                    'hora_inicio' => (string) $turnoBloqueado->hora_inicio,
+                                    'hora_fin' => (string) $turnoBloqueado->hora_fin,
+                                ]);
+
+                                return $turnoBloqueado->load('alumno');
+                            });
+                        } catch (ValidationException $exception) {
+                            Notification::make()
+                                ->title('No se pudo suspender la clase')
+                                ->body(collect($exception->errors())->flatten()->first())
+                                ->warning()
+                                ->send();
+
                             return;
                         }
 
-                        /** @var AuditLogger $audit */
-                        $audit = app(AuditLogger::class);
-
-                        $estadoAntes = (string) $record->estado;
-
-                        $record->update([
-                            'estado' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
-                            'suspendido_at' => now(),
-                            'suspendido_por_id' => Auth::id(),
-                            'suspension_motivo' => trim((string) $data['suspension_motivo']),
-                        ]);
-
-                        $audit->log('turno.suspendido_profesor', $record, [
-                            'turno_id' => $record->id,
-                            'profesor_id' => $record->profesor_id,
-                            'alumno_id' => $record->alumno_id,
-                            'estado_anterior' => $estadoAntes,
-                            'estado_nuevo' => Turno::ESTADO_SUSPENDIDO_PROFESOR,
-                            'suspendido_por_id' => Auth::id(),
-                            'suspension_motivo' => $record->suspension_motivo,
-                            'fecha' => (string) $record->fecha,
-                            'hora_inicio' => (string) $record->hora_inicio,
-                            'hora_fin' => (string) $record->hora_fin,
-                        ]);
-
-                        $emailAlumno = $record->alumno?->email;
-                        if ($emailAlumno) {
-                            Mail::to($emailAlumno)->send(new AlumnoClaseSuspendidaPorProfesor($record));
+                        if ($turnoSuspendido->alumno?->email) {
+                            Mail::to($turnoSuspendido->alumno->email)
+                                ->send(new AlumnoClaseSuspendidaPorProfesor($turnoSuspendido));
                         }
                     }),
 
@@ -284,6 +294,14 @@ class TurnosTable
                     }),
             ])
             ->paginated();
+    }
+
+    private static function puedeSuspender(Turno $turno, int $profesorId): bool
+    {
+        return (int) $turno->profesor_id === $profesorId
+            && $turno->estado === Turno::ESTADO_CONFIRMADO
+            && $turno->pago?->estado === Pago::ESTADO_APROBADO
+            && now()->lt($turno->finDateTime());
     }
 
 }

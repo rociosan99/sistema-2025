@@ -205,7 +205,7 @@
                 </div>
 
                 <div style="display:flex; flex-direction:column; gap:8px;">
-                    <label style="font-weight:900;">Precio por hora (default)</label>
+                    <label style="font-weight:900;">Precio por hora</label>
                     @if($isEditing)
                         <input type="number" step="0.01" wire:model.live="precio_por_hora_default"
                                placeholder="Ej: 12000"
@@ -228,6 +228,35 @@
                     @else
                         <div style="padding:10px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb;">
                             {{ $titulo_profesional ?: '—' }}
+                        </div>
+                    @endif
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:8px; grid-column: 1 / 3;">
+                    <label style="font-weight:900;">
+                        Enlace de clase predeterminado <span style="color:#b91c1c;">*</span>
+                    </label>
+                    @if($isEditing)
+                        <input
+                            type="url"
+                            wire:model.live="enlace_clase_default"
+                            placeholder="https://meet.google.com/abc-defg-hij"
+                            maxlength="2048"
+                            required
+                            style="border:1px solid #d1d5db; border-radius:12px; padding:10px;"
+                        >
+                        @error('enlace_clase_default')
+                            <div style="font-size:12px; color:#b91c1c;">{{ $message }}</div>
+                        @enderror
+                    @else
+                        <div style="padding:10px; border:1px solid #e5e7eb; border-radius:12px; background:#f9fafb; overflow-wrap:anywhere;">
+                            @if($enlace_clase_default)
+                                <a href="{{ $enlace_clase_default }}" target="_blank" rel="noopener noreferrer">
+                                    {{ $enlace_clase_default }}
+                                </a>
+                            @else
+                                —
+                            @endif
                         </div>
                     @endif
                 </div>

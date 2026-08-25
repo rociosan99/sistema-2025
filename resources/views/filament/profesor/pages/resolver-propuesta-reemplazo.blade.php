@@ -82,4 +82,171 @@
             @endif
         </x-filament::section>
     </div>
+
+    @if($mostrarAlertaCorregible)
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="alerta-corregible-titulo"
+            style="
+                position: fixed;
+                inset: 0;
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                background: rgba(15, 23, 42, 0.68);
+            "
+        >
+            <div
+                style="
+                    width: 100%;
+                    max-width: 440px;
+                    padding: 32px 28px 26px;
+                    border-radius: 18px;
+                    background: #ffffff;
+                    text-align: center;
+                    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+                "
+            >
+                <div
+                    aria-hidden="true"
+                    style="
+                        width: 72px;
+                        height: 72px;
+                        margin: 0 auto 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 9999px;
+                        background: #fef3c7;
+                        color: #d97706;
+                        font-size: 38px;
+                        font-weight: 800;
+                    "
+                >
+                    ⚠
+                </div>
+
+                <h2
+                    id="alerta-corregible-titulo"
+                    style="
+                        margin: 0;
+                        color: #111827;
+                        font-size: 22px;
+                        font-weight: 800;
+                        line-height: 1.3;
+                    "
+                >
+                    Atención
+                </h2>
+
+                <p
+                    style="
+                        margin: 14px 0 24px;
+                        color: #4b5563;
+                        font-size: 15px;
+                        line-height: 1.6;
+                        overflow-wrap: anywhere;
+                    "
+                >
+                    {{ $mensajeAlertaCorregible }}
+                </p>
+
+                <x-filament::button
+                    type="button"
+                    color="warning"
+                    wire:click="cerrarAlertaCorregible"
+                    wire:loading.attr="disabled"
+                    wire:target="cerrarAlertaCorregible"
+                >
+                    Entendido
+                </x-filament::button>
+            </div>
+        </div>
+    @endif
+
+    @if($mostrarModalExito)
+        <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="propuesta-aceptada-titulo"
+            style="
+                position: fixed;
+                inset: 0;
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+                background: rgba(15, 23, 42, 0.68);
+            "
+        >
+            <div
+                style="
+                    width: 100%;
+                    max-width: 440px;
+                    padding: 32px 28px 26px;
+                    border-radius: 18px;
+                    background: #ffffff;
+                    text-align: center;
+                    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+                "
+            >
+                <div
+                    aria-hidden="true"
+                    style="
+                        width: 72px;
+                        height: 72px;
+                        margin: 0 auto 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border-radius: 9999px;
+                        background: #dcfce7;
+                        color: #16a34a;
+                        font-size: 40px;
+                        font-weight: 800;
+                    "
+                >
+                    ✓
+                </div>
+
+                <h2
+                    id="propuesta-aceptada-titulo"
+                    style="
+                        margin: 0;
+                        color: #111827;
+                        font-size: 22px;
+                        font-weight: 800;
+                        line-height: 1.3;
+                    "
+                >
+                    Propuesta aceptada
+                </h2>
+
+                <p
+                    style="
+                        margin: 14px 0 24px;
+                        color: #4b5563;
+                        font-size: 15px;
+                        line-height: 1.6;
+                    "
+                >
+                    La clase ya fue incorporada a tus turnos confirmados.
+                </p>
+
+                <x-filament::button
+                    type="button"
+                    color="success"
+                    wire:click="continuarDespuesDeAceptar"
+                    wire:loading.attr="disabled"
+                    wire:target="continuarDespuesDeAceptar"
+                >
+                    Entendido
+                </x-filament::button>
+            </div>
+        </div>
+    @endif
 </x-filament-panels::page>

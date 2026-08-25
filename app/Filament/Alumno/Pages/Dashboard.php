@@ -273,6 +273,11 @@ class Dashboard extends Page
                         throw new \RuntimeException('Ese horario ya no está disponible.');
                     }
 
+                    $turnoCancelado = Turno::query()
+                        ->whereKey($r->turno_cancelado_id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
+
                     // crear turno para el alumno que acepta
                     Turno::create([
                         'alumno_id'   => $alumnoId,
@@ -283,6 +288,7 @@ class Dashboard extends Page
                         'hora_inicio' => $r->hora_inicio,
                         'hora_fin'    => $r->hora_fin,
                         'estado'      => Turno::ESTADO_PENDIENTE_PAGO,
+                        'enlace_clase' => $turnoCancelado->enlace_clase,
                     ]);
 
                     // marcar invitación aceptada

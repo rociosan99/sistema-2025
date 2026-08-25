@@ -16,6 +16,7 @@ class ProfesorProfile extends Model
         'nivel',
         'precio_por_hora_default',
         'titulo_profesional',
+        'enlace_clase_default',
     ];
 
     public function user()

@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
+use App\Mail\AlumnoReemplazoProfesorConfirmado;
 use App\Models\Pago;
 use App\Models\Turno;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class ReemplazoProfesorService
@@ -14,6 +16,7 @@ class ReemplazoProfesorService
     public function __construct(
         private readonly SlotService $slotService,
         private readonly AuditLogger $audit,
+        private readonly EnlaceClaseProfesorService $enlaceClaseProfesorService,
     ) {
     }
 
@@ -122,13 +125,15 @@ class ReemplazoProfesorService
                 $horaFin,
             );
 
+            $enlaceClase = $this->enlaceClaseProfesorService->obtenerPredeterminado($profesorId);
+
             $turnoBloqueado->update([
                 'profesor_id' => $profesorId,
                 'fecha' => $fecha,
                 'hora_inicio' => $horaInicio,
                 'hora_fin' => $horaFin,
                 'estado' => Turno::ESTADO_CONFIRMADO,
-                'enlace_clase' => null,
+                'enlace_clase' => $enlaceClase,
                 ...$this->camposPropuestaVacios(),
             ]);
 
@@ -144,6 +149,19 @@ class ReemplazoProfesorService
                 'precio_total_conservado' => (float) $turnoBloqueado->precio_total,
                 'pago_id' => $turnoBloqueado->pago?->pago_id,
             ], $profesorId);
+
+            $turnoId = (int) $turnoBloqueado->getKey();
+
+            DB::afterCommit(function () use ($turnoId): void {
+                $turnoConfirmado = Turno::query()
+                    ->with(['alumno', 'profesor', 'materia', 'tema'])
+                    ->find($turnoId);
+
+                if ($turnoConfirmado?->alumno?->email) {
+                    Mail::to($turnoConfirmado->alumno->email)
+                        ->send(new AlumnoReemplazoProfesorConfirmado($turnoConfirmado));
+                }
+            });
 
             return $turnoBloqueado->fresh();
         });
