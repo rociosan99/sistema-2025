@@ -33,4 +33,20 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    public function alumno(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'alumno',
+            'activo' => true,
+        ]);
+    }
+
+    public function profesor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'profesor',
+            'activo' => true,
+        ]);
+    }
 }

@@ -17,6 +17,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         $statements = [
             <<<'SQL'
 ALTER TABLE `alumno_carreras`
@@ -240,6 +244,10 @@ SQL
      */
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         $statements = [
             <<<'SQL'
 ALTER TABLE `alumno_carreras`
