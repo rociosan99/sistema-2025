@@ -149,7 +149,7 @@ class TurnoResource extends Resource
             ->filtersFormColumns([
                 'default' => 1,
                 'md' => 2,
-                'lg' => 6,
+                'lg' => 10,
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('estado')
