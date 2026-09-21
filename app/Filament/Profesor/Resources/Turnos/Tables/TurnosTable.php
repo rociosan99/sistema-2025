@@ -11,6 +11,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Support\Colors\Color;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -96,12 +97,12 @@ class TurnosTable
                 TextColumn::make('enlace_clase')
                     ->label('Enlace')
                     ->placeholder('-')
-                    ->limit(35)
-                    ->tooltip(fn ($state) => $state)
+                    ->formatStateUsing(fn ($state) => filled($state) ? 'Enlace de clase' : null)
+                    ->icon('heroicon-o-link')
+                    ->badge()
+                    ->color(Color::Purple)
                     ->url(fn ($state) => filled($state) ? $state : null)
                     ->openUrlInNewTab()
-                    ->copyable()
-                    ->copyMessage('Enlace copiado')
                     ->toggleable(),
             ])
 
