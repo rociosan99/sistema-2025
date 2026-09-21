@@ -17,8 +17,8 @@ class TurnoResource extends Resource
 {
     protected static ?string $model = Turno::class;
 
-    protected static ?string $navigationLabel = 'Solicitudes de Turno';
-    protected static ?string $pluralModelLabel = 'Solicitudes';
+    protected static ?string $navigationLabel = 'Turnos';
+    protected static ?string $pluralModelLabel = 'Turnos';
 
     protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-calendar-days';
 
