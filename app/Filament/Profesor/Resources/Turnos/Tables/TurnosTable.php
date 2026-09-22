@@ -12,6 +12,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\Size;
 use Filament\Tables;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\FiltersLayout;
@@ -34,23 +35,30 @@ class TurnosTable
                         $nombre = trim(($record->alumno?->name ?? '') . ' ' . ($record->alumno?->apellido ?? ''));
                         return $nombre !== '' ? $nombre : ($record->alumno?->name ?? '-');
                     })
+                    ->width('10rem')
+                    ->wrap()
                     ->searchable(),
 
                 TextColumn::make('materia.materia_nombre')
                     ->label('Materia')
+                    ->width('12rem')
+                    ->wrap()
                     ->placeholder('-'),
 
                 TextColumn::make('fecha')
                     ->label('Fecha')
                     ->date()
+                    ->width('7rem')
                     ->sortable(),
 
                 TextColumn::make('hora_inicio')
                     ->label('Desde')
+                    ->width('4.5rem')
                     ->formatStateUsing(fn ($state) => $state ? substr((string) $state, 0, 5) : '-'),
 
                 TextColumn::make('hora_fin')
                     ->label('Hasta')
+                    ->width('4.5rem')
                     ->formatStateUsing(fn ($state) => $state ? substr((string) $state, 0, 5) : '-'),
 
                 TextColumn::make('estado')
@@ -191,7 +199,10 @@ class TurnosTable
 
                 Action::make('suspender')
                     ->label('Suspender clase')
+                    ->icon('heroicon-o-x-mark')
                     ->color('danger')
+                    ->button()
+                    ->size(Size::Small)
                     ->requiresConfirmation()
                     ->form([
                         TextInput::make('suspension_motivo')

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Alumno\Pages;
 
+use App\Jobs\GenerarOfertasInteligentesDesdeSolicitudesJob;
 use App\Models\Materia;
 use App\Models\SolicitudDisponibilidad;
 use App\Models\Tema;
@@ -148,7 +149,7 @@ if ($fechaSeleccionada < $hoy) {
             ]);
         }
 
-        SolicitudDisponibilidad::create([
+        $solicitud = SolicitudDisponibilidad::create([
             'alumno_id' => Auth::id(),
             'materia_id' => $this->materiaId,
             'tema_id' => $this->temaId ?: null,
@@ -160,6 +161,8 @@ if ($fechaSeleccionada < $hoy) {
                 ? date('Y-m-d H:i:s', strtotime($this->expiresAt))
                 : null,
         ]);
+
+        GenerarOfertasInteligentesDesdeSolicitudesJob::dispatchSync($solicitud->id);
 
         Notification::make()
             ->title('Solicitud creada')
