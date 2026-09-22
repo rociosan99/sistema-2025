@@ -136,6 +136,14 @@ class OfertasSolicitudes extends Page
 
             if ($vencimiento->lte(now())) continue;
 
+            $profesorSigueCompatible = app(SolicitudMatchingService::class)
+                ->profesoresCompatibles($solicitud, $slotInicio, $slotFin)
+                ->contains(fn (array $candidato): bool =>
+                    (int) $candidato['profesor_id'] === $profesorId
+                );
+
+            if (! $profesorSigueCompatible) continue;
+
             $visibles[] = [
                 'id' => $oferta->id,
                 'alumno_id' => (int) $solicitud->alumno_id,
