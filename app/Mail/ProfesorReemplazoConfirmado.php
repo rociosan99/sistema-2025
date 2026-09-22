@@ -32,7 +32,7 @@ class ProfesorReemplazoConfirmado extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.profesor-reemplazo-confirmado',
+            view: 'emails.profesor.profesor-reemplazo-confirmado',
             with: [
                 'turnoCancelado' => $this->turnoCancelado,
                 'turnoNuevo' => $this->turnoNuevo,

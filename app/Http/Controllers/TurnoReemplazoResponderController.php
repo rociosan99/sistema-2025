@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Alumno\Pages\VerTurnoAlumno;
+use App\Filament\Alumno\Resources\Turnos\TurnoResource;
 use App\Jobs\NotificarReemplazoNoConseguidoJob;
 use App\Mail\ProfesorReemplazoConfirmado;
 use App\Models\Turno;
@@ -15,12 +17,7 @@ use Illuminate\Support\Facades\Mail;
 
 class TurnoReemplazoResponderController extends Controller
 {
-    public function __invoke(
-        Request $request,
-        TurnoReemplazo $turnoReemplazo,
-        string $accion,
-        SolicitudMatchingService $matcher,
-    )
+    public function __invoke(Request $request, TurnoReemplazo $turnoReemplazo, string $accion, SolicitudMatchingService $matcher)
     {
         if (! Auth::check()) {
             return redirect()->guest(route('filament.alumno.auth.login'));
@@ -41,12 +38,6 @@ class TurnoReemplazoResponderController extends Controller
             abort(404);
         }
 
-        if ($turnoReemplazo->expires_at && $turnoReemplazo->expires_at->isPast()) {
-            $turnoReemplazo->update(['estado' => TurnoReemplazo::ESTADO_EXPIRADA]);
-
-            return back()->with('error', 'La invitación expiró.');
-        }
-
         return $accion === 'rechazar'
             ? $this->rechazar($turnoReemplazo)
             : $this->aceptar($turnoReemplazo, $matcher);
@@ -54,28 +45,49 @@ class TurnoReemplazoResponderController extends Controller
 
     private function rechazar(TurnoReemplazo $inv)
     {
-        DB::transaction(function () use ($inv) {
+        $resultado = DB::transaction(function () use ($inv) {
             $invLocked = TurnoReemplazo::whereKey($inv->id)->lockForUpdate()->first();
 
             if (! $invLocked) {
-                return;
+                return ['estado' => 'no_disponible'];
             }
 
-            if ($invLocked->estado !== TurnoReemplazo::ESTADO_PENDIENTE) {
-                return;
+            if ($invLocked->estado === TurnoReemplazo::ESTADO_ACEPTADA) {
+                return ['estado' => 'aceptada', 'turno' => $this->buscarTurnoCreado($invLocked)];
             }
 
-            $invLocked->update([
-                'estado' => TurnoReemplazo::ESTADO_RECHAZADA,
-            ]);
+            if (in_array($invLocked->estado, [TurnoReemplazo::ESTADO_RECHAZADA, TurnoReemplazo::ESTADO_EXPIRADA], true)) {
+                return ['estado' => 'respondida'];
+            }
+
+            if ($invLocked->expires_at && $invLocked->expires_at->isPast()) {
+                $invLocked->update(['estado' => TurnoReemplazo::ESTADO_EXPIRADA]);
+
+                return ['estado' => 'expirada'];
+            }
+
+            $invLocked->update(['estado' => TurnoReemplazo::ESTADO_RECHAZADA]);
+
+            return ['estado' => 'rechazada'];
         });
+
+        if ($resultado['estado'] === 'aceptada') {
+            return $this->redirigirATurnoAceptado($resultado['turno'], 'Esta invitación ya fue aceptada.');
+        }
+
+        if ($resultado['estado'] !== 'rechazada') {
+            $mensaje = $resultado['estado'] === 'expirada'
+                ? 'La invitación expiró.'
+                : 'Esta invitación ya fue respondida.';
+
+            return redirect(TurnoResource::getUrl('index', panel: 'alumno'))->with('error', $mensaje);
+        }
 
         $pendientes = TurnoReemplazo::query()
             ->where('turno_cancelado_id', $inv->turno_cancelado_id)
             ->where('estado', TurnoReemplazo::ESTADO_PENDIENTE)
             ->where(function ($q) {
-                $q->whereNull('expires_at')
-                    ->orWhere('expires_at', '>', now());
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
             })
             ->exists();
 
@@ -83,54 +95,52 @@ class TurnoReemplazoResponderController extends Controller
             dispatch(new NotificarReemplazoNoConseguidoJob($inv->turno_cancelado_id));
         }
 
-        return back()->with('success', 'Invitación rechazada.');
+        return redirect(TurnoResource::getUrl('index', panel: 'alumno'))->with('success', 'Invitación rechazada.');
     }
 
     private function aceptar(TurnoReemplazo $inv, SolicitudMatchingService $matcher)
     {
         /** @var Turno|null $turnoCancelado */
         $turnoCancelado = null;
-
         /** @var Turno|null $turnoNuevo */
         $turnoNuevo = null;
-
         $mensajeError = null;
+        $yaAceptada = false;
 
-        DB::transaction(function () use ($inv, $matcher, &$turnoCancelado, &$turnoNuevo, &$mensajeError) {
+        DB::transaction(function () use ($inv, $matcher, &$turnoCancelado, &$turnoNuevo, &$mensajeError, &$yaAceptada) {
             $invLocked = TurnoReemplazo::whereKey($inv->id)->lockForUpdate()->first();
 
             if (! $invLocked) {
                 return;
             }
 
-            if ($invLocked->estado !== TurnoReemplazo::ESTADO_PENDIENTE) {
+            if ($invLocked->estado === TurnoReemplazo::ESTADO_ACEPTADA) {
+                $turnoNuevo = $this->buscarTurnoCreado($invLocked);
+                $yaAceptada = true;
+
+                return;
+            }
+
+            if (in_array($invLocked->estado, [TurnoReemplazo::ESTADO_RECHAZADA, TurnoReemplazo::ESTADO_EXPIRADA], true)) {
+                $mensajeError = 'Esta invitación ya fue respondida.';
+
                 return;
             }
 
             if ($invLocked->expires_at && $invLocked->expires_at->isPast()) {
-                $invLocked->update([
-                    'estado' => TurnoReemplazo::ESTADO_EXPIRADA,
-                ]);
+                $invLocked->update(['estado' => TurnoReemplazo::ESTADO_EXPIRADA]);
+                $mensajeError = 'La invitación expiró.';
 
                 return;
             }
 
-            $turnoCanceladoLocked = Turno::whereKey($invLocked->turno_cancelado_id)
-                ->lockForUpdate()
-                ->first();
+            $turnoCanceladoLocked = Turno::whereKey($invLocked->turno_cancelado_id)->lockForUpdate()->first();
 
-            if (! $turnoCanceladoLocked) {
+            if (! $turnoCanceladoLocked || ! empty($turnoCanceladoLocked->reemplazado_por_turno_id)) {
                 return;
             }
 
-            if (! empty($turnoCanceladoLocked->reemplazado_por_turno_id)) {
-                return;
-            }
-
-            User::query()
-                ->whereKey($invLocked->alumno_id)
-                ->lockForUpdate()
-                ->firstOrFail();
+            User::query()->whereKey($invLocked->alumno_id)->lockForUpdate()->firstOrFail();
 
             if ($matcher->alumnoTieneChoque(
                 (int) $invLocked->alumno_id,
@@ -150,12 +160,7 @@ class TurnoReemplazoResponderController extends Controller
                     $q->where('hora_inicio', '<', $invLocked->hora_fin)
                         ->where('hora_fin', '>', $invLocked->hora_inicio);
                 })
-                ->whereIn('estado', [
-                    Turno::ESTADO_PENDIENTE,
-                    Turno::ESTADO_ACEPTADO,
-                    Turno::ESTADO_PENDIENTE_PAGO,
-                    Turno::ESTADO_CONFIRMADO,
-                ])
+                ->whereIn('estado', [Turno::ESTADO_PENDIENTE, Turno::ESTADO_ACEPTADO, Turno::ESTADO_PENDIENTE_PAGO, Turno::ESTADO_CONFIRMADO])
                 ->lockForUpdate()
                 ->exists();
 
@@ -164,35 +169,30 @@ class TurnoReemplazoResponderController extends Controller
             }
 
             $turnoNuevoCreated = Turno::create([
-                'alumno_id'       => $invLocked->alumno_id,
-                'profesor_id'     => $invLocked->profesor_id,
-                'materia_id'      => $invLocked->materia_id,
-                'tema_id'         => $invLocked->tema_id,
-                'fecha'           => $invLocked->fecha,
-                'hora_inicio'     => $invLocked->hora_inicio,
-                'hora_fin'        => $invLocked->hora_fin,
-                'estado'          => Turno::ESTADO_PENDIENTE_PAGO,
-                'enlace_clase'    => $turnoCanceladoLocked->enlace_clase,
+                'alumno_id' => $invLocked->alumno_id,
+                'profesor_id' => $invLocked->profesor_id,
+                'materia_id' => $invLocked->materia_id,
+                'tema_id' => $invLocked->tema_id,
+                'fecha' => $invLocked->fecha,
+                'hora_inicio' => $invLocked->hora_inicio,
+                'hora_fin' => $invLocked->hora_fin,
+                'estado' => Turno::ESTADO_PENDIENTE_PAGO,
+                'enlace_clase' => $turnoCanceladoLocked->enlace_clase,
                 'precio_por_hora' => $turnoCanceladoLocked->precio_por_hora,
-                'precio_total'    => $turnoCanceladoLocked->precio_total,
+                'precio_total' => $turnoCanceladoLocked->precio_total,
             ]);
 
             $turnoCanceladoLocked->update([
                 'reemplazado_por_turno_id' => $turnoNuevoCreated->id,
                 'reemplazado_at' => now(),
             ]);
-
-            $invLocked->update([
-                'estado' => TurnoReemplazo::ESTADO_ACEPTADA,
-            ]);
+            $invLocked->update(['estado' => TurnoReemplazo::ESTADO_ACEPTADA]);
 
             TurnoReemplazo::query()
                 ->where('turno_cancelado_id', $turnoCanceladoLocked->id)
                 ->where('id', '!=', $invLocked->id)
                 ->where('estado', TurnoReemplazo::ESTADO_PENDIENTE)
-                ->update([
-                    'estado' => TurnoReemplazo::ESTADO_EXPIRADA,
-                ]);
+                ->update(['estado' => TurnoReemplazo::ESTADO_EXPIRADA]);
 
             $turnoCancelado = $turnoCanceladoLocked;
             $turnoNuevo = $turnoNuevoCreated;
@@ -208,13 +208,43 @@ class TurnoReemplazoResponderController extends Controller
             });
         });
 
-        if (! $turnoNuevo || ! $turnoCancelado) {
-            return back()->with(
-                'error',
-                $mensajeError ?? 'No se pudo aceptar (quizás ya no está disponible).',
-            );
+        if ($yaAceptada) {
+            return $this->redirigirATurnoAceptado($turnoNuevo, 'Esta invitación ya fue aceptada.');
         }
 
-        return back()->with('success', '¡Aceptaste la clase! Te aparecerá para pagar.');
+        if (! $turnoNuevo || ! $turnoCancelado) {
+            return redirect(TurnoResource::getUrl('index', panel: 'alumno'))
+                ->with('error', $mensajeError ?? 'No se pudo aceptar (quizás ya no está disponible).');
+        }
+
+        return $this->redirigirATurnoAceptado($turnoNuevo, '¡Aceptaste la clase! Ya podés continuar con el pago.');
+    }
+
+    private function buscarTurnoCreado(TurnoReemplazo $invitacion): ?Turno
+    {
+        $turnoCancelado = Turno::query()
+            ->whereKey($invitacion->turno_cancelado_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (! $turnoCancelado?->reemplazado_por_turno_id) {
+            return null;
+        }
+
+        return Turno::query()
+            ->whereKey($turnoCancelado->reemplazado_por_turno_id)
+            ->where('alumno_id', Auth::id())
+            ->first();
+    }
+
+    private function redirigirATurnoAceptado(?Turno $turno, string $mensaje)
+    {
+        if (! $turno || (int) $turno->alumno_id !== (int) Auth::id()) {
+            return redirect(TurnoResource::getUrl('index', panel: 'alumno'))
+                ->with('error', 'La invitación ya fue respondida, pero no se encontró el turno asociado.');
+        }
+
+        return redirect(VerTurnoAlumno::getUrl(['record' => $turno->id], panel: 'alumno'))
+            ->with('success', $mensaje);
     }
 }

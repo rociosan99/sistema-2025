@@ -4,6 +4,8 @@
         $fecha = $turno->fecha?->format('d/m/Y') ?? '-';
         $horaInicio = substr((string) $turno->hora_inicio, 0, 5);
         $horaFin = substr((string) $turno->hora_fin, 0, 5);
+        $puedePagar = $turno->estado === \App\Models\Turno::ESTADO_PENDIENTE_PAGO
+            && now()->lt($turno->inicioDateTime());
     @endphp
 
     <div class="mx-auto w-full max-w-4xl">
@@ -67,6 +69,17 @@
                         >
                             Volver a mis turnos
                         </x-filament::button>
+
+                        @if($puedePagar)
+                            <x-filament::button
+                                tag="a"
+                                color="primary"
+                                icon="heroicon-o-credit-card"
+                                href="{{ \App\Filament\Alumno\Pages\CompletarPagoTurno::getUrl(['record' => $turno->id], panel: 'alumno') }}"
+                            >
+                                Pagar
+                            </x-filament::button>
+                        @endif
 
                         @if($this->puedeVerEnlace())
                             <x-filament::button
