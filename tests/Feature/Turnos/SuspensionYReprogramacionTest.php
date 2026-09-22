@@ -53,6 +53,15 @@ class SuspensionYReprogramacionTest extends TestCase
             'hora_fin' => '12:00:00',
         ]);
 
+        $detalle = app(CreditoService::class)->previsualizarCancelacion($turno, $politica);
+
+        $this->assertTrue($detalle['es_anticipada']);
+        $this->assertSame(100.0, $detalle['importe_pagado']);
+        $this->assertSame(100.0, $detalle['importe_credito']);
+        $this->assertSame(0.0, $detalle['importe_retencion']);
+        $this->assertSame(100.0, $detalle['porcentaje_credito']);
+        $this->assertSame(0.0, $detalle['porcentaje_retencion']);
+
         $this->suspenderComoAlumno($turno, $politica);
 
         $credito = Credito::query()->where('turno_id', $turno->id)->sole();
@@ -73,6 +82,15 @@ class SuspensionYReprogramacionTest extends TestCase
             'hora_inicio' => '20:00:00',
             'hora_fin' => '21:00:00',
         ]);
+
+        $detalle = app(CreditoService::class)->previsualizarCancelacion($turno, $politica);
+
+        $this->assertFalse($detalle['es_anticipada']);
+        $this->assertSame(100.0, $detalle['importe_pagado']);
+        $this->assertSame(75.0, $detalle['importe_credito']);
+        $this->assertSame(25.0, $detalle['importe_retencion']);
+        $this->assertSame(75.0, $detalle['porcentaje_credito']);
+        $this->assertSame(25.0, $detalle['porcentaje_retencion']);
 
         $this->suspenderComoAlumno($turno, $politica);
 

@@ -37,6 +37,8 @@ class TurnoResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $creditoService = null;
+        $politica = null;
         $politicaCancelacion = null;
         $politicaCancelacionError = null;
 
@@ -138,10 +140,28 @@ class TurnoResource extends Resource
                 ViewColumn::make('acciones')
                     ->label('Acciones')
                     ->view('filament.alumno.turnos.acciones')
-                    ->viewData([
-                        'politicaCancelacion' => $politicaCancelacion,
-                        'politicaCancelacionError' => $politicaCancelacionError,
-                    ])
+                    ->viewData(function (Turno $record) use (
+                        $creditoService,
+                        $politica,
+                        $politicaCancelacion,
+                        $politicaCancelacionError,
+                    ): array {
+                        $detalleSuspension = null;
+
+                        if ($politicaCancelacion && isset($creditoService, $politica)) {
+                            try {
+                                $detalleSuspension = $creditoService->previsualizarCancelacion($record, $politica);
+                            } catch (ValidationException) {
+                                $politicaCancelacionError = 'No se pudo calcular el detalle de la suspensión.';
+                            }
+                        }
+
+                        return [
+                            'politicaCancelacion' => $politicaCancelacion,
+                            'politicaCancelacionError' => $politicaCancelacionError,
+                            'detalleSuspension' => $detalleSuspension,
+                        ];
+                    })
                     ->extraCellAttributes(['class' => 'py-3']),
             ])
             ->recordClasses('border-b border-gray-200 dark:border-white/10')

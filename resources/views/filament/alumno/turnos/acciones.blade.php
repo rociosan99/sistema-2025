@@ -133,7 +133,7 @@
             </x-slot>
 
             <x-slot name="heading">
-                Términos y condiciones de suspensión
+                Detalle de la suspensión
             </x-slot>
 
             <form method="POST"
@@ -142,30 +142,50 @@
                   style="display:flex; width:100%; min-width:0; flex-direction:column; gap:18px; overflow-wrap:anywhere; white-space:normal;">
                 @csrf
 
-                @if($politicaCancelacion)
+                @if($politicaCancelacion && $detalleSuspension)
                     @php
                         $formatearPorcentaje = static fn ($valor) => rtrim(
                             rtrim(number_format((float) $valor, 2, ',', '.'), '0'),
                             ','
                         );
+                        $formatearImporte = static fn ($valor) => '$' . number_format((float) $valor, 2, ',', '.');
                     @endphp
 
                     <input type="hidden"
                            name="politica_version"
                            value="{{ $politicaCancelacion['version'] }}">
 
-                    <div style="display:flex; min-width:0; flex-direction:column; gap:10px; color:#475569; font-size:14px; line-height:1.6; white-space:normal;">
-                        <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
-                            Si suspendés con <strong>{{ $politicaCancelacion['horas_sin_penalizacion'] }} horas o más</strong> de anticipación, se acreditará el <strong>{{ $formatearPorcentaje($politicaCancelacion['porcentaje_credito_anticipado']) }}%</strong> del importe pagado.
+                    <div style="display:flex; min-width:0; flex-direction:column; gap:12px; color:#475569; font-size:14px; line-height:1.55; white-space:normal;">
+                        <p style="margin:0; color:#111827; font-size:15px; font-weight:700;">
+                            ¿Querés suspender esta clase?
                         </p>
                         <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
-                            Si suspendés con menos de <strong>{{ $politicaCancelacion['horas_sin_penalizacion'] }} horas</strong>, se acreditará el <strong>{{ $formatearPorcentaje($politicaCancelacion['porcentaje_credito_tardio']) }}%</strong> y se aplicará una penalización del <strong>{{ $formatearPorcentaje($politicaCancelacion['porcentaje_penalizacion']) }}%</strong>.
+                            Pagaste <strong>{{ $formatearImporte($detalleSuspension['importe_pagado']) }}</strong> por esta clase.
                         </p>
                         <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
-                            Los créditos tendrán una vigencia de <strong>{{ $politicaCancelacion['vigencia_creditos_dias'] }} días</strong> desde su acreditación. Permanecen dentro de la plataforma y no se reintegran al medio de pago.
+                            @if($detalleSuspension['es_anticipada'])
+                                Como estás suspendiendo con al menos <strong>{{ $detalleSuspension['horas_limite'] }} horas</strong> de anticipación, recibirás <strong>{{ $formatearImporte($detalleSuspension['importe_credito']) }}</strong> en créditos ({{ $formatearPorcentaje($detalleSuspension['porcentaje_credito']) }}%) para utilizar en otra clase.
+                            @else
+                                Como faltan menos de <strong>{{ $detalleSuspension['horas_limite'] }} horas</strong> para su inicio, recibirás <strong>{{ $formatearImporte($detalleSuspension['importe_credito']) }}</strong> en créditos ({{ $formatearPorcentaje($detalleSuspension['porcentaje_credito']) }}%) para utilizar en otra clase.
+                            @endif
+                        </p>
+
+                        <div style="display:grid; grid-template-columns:minmax(0, 1fr) auto; gap:8px 16px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc; color:#0f172a;">
+                            <strong>Crédito a recibir</strong>
+                            <span style="font-weight:800; color:#166534; white-space:nowrap;">
+                                {{ $formatearImporte($detalleSuspension['importe_credito']) }} ({{ $formatearPorcentaje($detalleSuspension['porcentaje_credito']) }}%)
+                            </span>
+                            <strong>Retención</strong>
+                            <span style="font-weight:800; color:#991b1b; white-space:nowrap;">
+                                {{ $formatearImporte($detalleSuspension['importe_retencion']) }}@if($detalleSuspension['porcentaje_retencion'] > 0) ({{ $formatearPorcentaje($detalleSuspension['porcentaje_retencion']) }}%)@endif
+                            </span>
+                        </div>
+
+                        <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
+                            El crédito tendrá una vigencia de <strong>{{ $detalleSuspension['vigencia_dias'] }} días</strong> y permanecerá dentro de la plataforma; no se reintegra al medio de pago.
                         </p>
                         <p style="margin:0; max-width:100%; white-space:normal; overflow-wrap:anywhere;">
-                            La suspensión es definitiva una vez confirmada.
+                            Una vez confirmada, la suspensión no podrá deshacerse.
                         </p>
                     </div>
 
@@ -176,7 +196,7 @@
                                required
                                x-model="aceptado"
                                style="width:16px; height:16px; margin-top:2px; flex-shrink:0;">
-                        <span style="min-width:0; flex:1; white-space:normal; overflow-wrap:anywhere;">He leído y acepto los términos y condiciones de suspensión.</span>
+                        <span style="min-width:0; flex:1; white-space:normal; overflow-wrap:anywhere;">Leí y acepto el detalle de la suspensión.</span>
                     </label>
                 @else
                     <div style="padding:12px; border:1px solid #fecaca; border-radius:10px; background:#fef2f2; color:#991b1b; font-size:14px; white-space:normal; overflow-wrap:anywhere;">

@@ -6,6 +6,8 @@ use App\Jobs\NotificarReemplazoNoConseguidoJob;
 use App\Mail\ProfesorReemplazoConfirmado;
 use App\Models\Turno;
 use App\Models\TurnoReemplazo;
+use App\Models\User;
+use App\Services\SolicitudMatchingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +15,12 @@ use Illuminate\Support\Facades\Mail;
 
 class TurnoReemplazoResponderController extends Controller
 {
-    public function __invoke(Request $request, TurnoReemplazo $turnoReemplazo, string $accion)
+    public function __invoke(
+        Request $request,
+        TurnoReemplazo $turnoReemplazo,
+        string $accion,
+        SolicitudMatchingService $matcher,
+    )
     {
         if (! Auth::check()) {
             return redirect()->guest(route('filament.alumno.auth.login'));
@@ -42,7 +49,7 @@ class TurnoReemplazoResponderController extends Controller
 
         return $accion === 'rechazar'
             ? $this->rechazar($turnoReemplazo)
-            : $this->aceptar($turnoReemplazo);
+            : $this->aceptar($turnoReemplazo, $matcher);
     }
 
     private function rechazar(TurnoReemplazo $inv)
@@ -79,7 +86,7 @@ class TurnoReemplazoResponderController extends Controller
         return back()->with('success', 'Invitación rechazada.');
     }
 
-    private function aceptar(TurnoReemplazo $inv)
+    private function aceptar(TurnoReemplazo $inv, SolicitudMatchingService $matcher)
     {
         /** @var Turno|null $turnoCancelado */
         $turnoCancelado = null;
@@ -87,7 +94,9 @@ class TurnoReemplazoResponderController extends Controller
         /** @var Turno|null $turnoNuevo */
         $turnoNuevo = null;
 
-        DB::transaction(function () use ($inv, &$turnoCancelado, &$turnoNuevo) {
+        $mensajeError = null;
+
+        DB::transaction(function () use ($inv, $matcher, &$turnoCancelado, &$turnoNuevo, &$mensajeError) {
             $invLocked = TurnoReemplazo::whereKey($inv->id)->lockForUpdate()->first();
 
             if (! $invLocked) {
@@ -115,6 +124,22 @@ class TurnoReemplazoResponderController extends Controller
             }
 
             if (! empty($turnoCanceladoLocked->reemplazado_por_turno_id)) {
+                return;
+            }
+
+            User::query()
+                ->whereKey($invLocked->alumno_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($matcher->alumnoTieneChoque(
+                (int) $invLocked->alumno_id,
+                $invLocked->fecha->toDateString(),
+                (string) $invLocked->hora_inicio,
+                (string) $invLocked->hora_fin,
+            )) {
+                $mensajeError = 'Ya tenés otro turno en ese día y horario. Esta invitación ya no está disponible para vos.';
+
                 return;
             }
 
@@ -184,7 +209,10 @@ class TurnoReemplazoResponderController extends Controller
         });
 
         if (! $turnoNuevo || ! $turnoCancelado) {
-            return back()->with('error', 'No se pudo aceptar (quizás ya no está disponible).');
+            return back()->with(
+                'error',
+                $mensajeError ?? 'No se pudo aceptar (quizás ya no está disponible).',
+            );
         }
 
         return back()->with('success', '¡Aceptaste la clase! Te aparecerá para pagar.');

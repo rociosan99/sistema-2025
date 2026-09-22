@@ -13,6 +13,31 @@ use Illuminate\Support\Facades\DB;
 
 class SolicitudMatchingService
 {
+    public function alumnoTieneChoque(
+        int $alumnoId,
+        string $fecha,
+        string $horaInicio,
+        string $horaFin,
+    ): bool {
+        $horaInicio = $this->normalizarHora($horaInicio);
+        $horaFin = $this->normalizarHora($horaFin);
+
+        return Turno::query()
+            ->where('alumno_id', $alumnoId)
+            ->whereDate('fecha', $fecha)
+            ->whereIn('estado', [
+                Turno::ESTADO_PENDIENTE,
+                Turno::ESTADO_ACEPTADO,
+                Turno::ESTADO_PENDIENTE_PAGO,
+                Turno::ESTADO_CONFIRMADO,
+            ])
+            ->where(function ($query) use ($horaInicio, $horaFin) {
+                $query->where('hora_inicio', '<', $horaFin)
+                    ->where('hora_fin', '>', $horaInicio);
+            })
+            ->exists();
+    }
+
     /**
      * Devuelve profesores compatibles para un SLOT específico (hora_inicio/hora_fin).
      * - dicta materia

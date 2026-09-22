@@ -85,6 +85,15 @@ class ProcesarReemplazoTurnoCanceladoJob implements ShouldQueue
                 continue;
             }
 
+            if ($matcher->alumnoTieneChoque(
+                (int) $s->alumno_id,
+                $fecha,
+                $slotInicio,
+                $slotFin,
+            )) {
+                continue;
+            }
+
             $inv = TurnoReemplazo::updateOrCreate(
                 [
                     'turno_cancelado_id' => $turno->id,

@@ -114,26 +114,11 @@ class CreditoService
             ->lockForUpdate()
             ->first();
 
-        $porcentajeCredito = $esAnticipada
-            ? (float) $politica->porcentaje_credito_anticipado
-            : (float) $politica->porcentaje_credito_tardio;
-
-        $porcentajePenalizacion = $esAnticipada
-            ? self::PORCENTAJE_MAXIMO - $porcentajeCredito
-            : (float) $politica->porcentaje_penalizacion_tardia;
-
-        $estado = match (true) {
-            $pago?->estado === Pago::ESTADO_APROBADO => Credito::ESTADO_DISPONIBLE,
-            ! $pago => Credito::ESTADO_NO_APLICA,
-            $pago->estado === Pago::ESTADO_RECHAZADO,
-            $pago->estado === Pago::ESTADO_ERROR,
-            $pago->mp_status === 'cancelled' => Credito::ESTADO_NO_APLICA,
-            default => Credito::ESTADO_ESPERANDO_PAGO,
-        };
-
-        $importes = $estado === Credito::ESTADO_DISPONIBLE
-            ? $this->calcularImportes($pago, $porcentajeCredito)
-            : $this->importesEnCero();
+        $detalle = $this->calcularDetalleCancelacion($pago, $politica, $esAnticipada);
+        $porcentajeCredito = $detalle['porcentaje_credito'];
+        $porcentajePenalizacion = $detalle['porcentaje_retencion'];
+        $estado = $detalle['estado_credito'];
+        $importes = $detalle['importes'];
 
         $porcentajeProfesorPenalizacion = (float) $politica->porcentaje_profesor_penalizacion;
         $porcentajePlataformaPenalizacion = (float) $politica->porcentaje_plataforma_penalizacion;
@@ -164,6 +149,44 @@ class CreditoService
             'cancelado_at' => $turno->cancelado_at ?? now(),
             'vence_at' => $venceAt,
         ]);
+    }
+
+    /**
+     * @return array{
+     *     es_anticipada:bool,
+     *     horas_limite:int,
+     *     vigencia_dias:int,
+     *     porcentaje_credito:float,
+     *     porcentaje_retencion:float,
+     *     importe_pagado:float,
+     *     importe_credito:float,
+     *     importe_retencion:float,
+     *     estado_credito:string
+     * }
+     */
+    public function previsualizarCancelacion(Turno $turno, PoliticaCancelacion $politica): array
+    {
+        $esAnticipada = $turno->inicioDateTime()->gte(
+            now()->copy()->addHours($politica->horas_cancelacion_sin_penalizacion),
+        );
+
+        $pago = Pago::query()
+            ->where('turno_id', $turno->id)
+            ->first();
+
+        $detalle = $this->calcularDetalleCancelacion($pago, $politica, $esAnticipada);
+
+        return [
+            'es_anticipada' => $esAnticipada,
+            'horas_limite' => (int) $politica->horas_cancelacion_sin_penalizacion,
+            'vigencia_dias' => (int) $politica->vigencia_creditos_dias,
+            'porcentaje_credito' => $detalle['porcentaje_credito'],
+            'porcentaje_retencion' => $detalle['porcentaje_retencion'],
+            'importe_pagado' => $detalle['importes']['importe_pagado'],
+            'importe_credito' => $detalle['importes']['importe_credito'],
+            'importe_retencion' => $detalle['importes']['importe_penalizacion'],
+            'estado_credito' => $detalle['estado_credito'],
+        ];
     }
 
     public function completarPorPagoAprobado(Pago $pago): ?Credito
@@ -289,6 +312,46 @@ class CreditoService
             'importe_credito' => $importeCredito,
             'importe_penalizacion' => $importePenalizacion,
             'saldo_disponible' => $importeCredito,
+        ];
+    }
+
+    /**
+     * @return array{
+     *     porcentaje_credito:float,
+     *     porcentaje_retencion:float,
+     *     estado_credito:string,
+     *     importes:array{importe_pagado:float, importe_credito:float, importe_penalizacion:float, saldo_disponible:float}
+     * }
+     */
+    private function calcularDetalleCancelacion(
+        ?Pago $pago,
+        PoliticaCancelacion $politica,
+        bool $esAnticipada,
+    ): array {
+        $porcentajeCredito = $esAnticipada
+            ? (float) $politica->porcentaje_credito_anticipado
+            : (float) $politica->porcentaje_credito_tardio;
+
+        $porcentajeRetencion = $esAnticipada
+            ? self::PORCENTAJE_MAXIMO - $porcentajeCredito
+            : (float) $politica->porcentaje_penalizacion_tardia;
+
+        $estado = match (true) {
+            $pago?->estado === Pago::ESTADO_APROBADO => Credito::ESTADO_DISPONIBLE,
+            ! $pago => Credito::ESTADO_NO_APLICA,
+            $pago->estado === Pago::ESTADO_RECHAZADO,
+            $pago->estado === Pago::ESTADO_ERROR,
+            $pago->mp_status === 'cancelled' => Credito::ESTADO_NO_APLICA,
+            default => Credito::ESTADO_ESPERANDO_PAGO,
+        };
+
+        return [
+            'porcentaje_credito' => $porcentajeCredito,
+            'porcentaje_retencion' => $porcentajeRetencion,
+            'estado_credito' => $estado,
+            'importes' => $estado === Credito::ESTADO_DISPONIBLE
+                ? $this->calcularImportes($pago, $porcentajeCredito)
+                : $this->importesEnCero(),
         ];
     }
 
