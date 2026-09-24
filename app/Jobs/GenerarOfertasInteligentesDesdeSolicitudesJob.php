@@ -6,7 +6,7 @@ use App\Models\OfertaSolicitud;
 use App\Models\SolicitudDisponibilidad;
 use App\Models\Turno;
 use App\Services\SolicitudMatchingService;
-use Carbon\Carbon;
+use App\Services\SolicitudDisponibilidadVencimientoService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,17 +22,15 @@ class GenerarOfertasInteligentesDesdeSolicitudesJob implements ShouldQueue
 
     public function handle(SolicitudMatchingService $matcher): void
     {
+        $vencimientoService = app(SolicitudDisponibilidadVencimientoService::class);
+        $vencimientoService->sincronizarActivas(solicitudId: $this->solicitudId);
+
         $maxSolicitudes = (int) config('matching.intelligent_max_solicitudes_per_run', 200);
         $maxOffersPorSolicitud = (int) config('matching.intelligent_max_offers_per_solicitud', 5);
         $ttlMin = (int) config('matching.intelligent_offer_ttl_minutes', 1440);
 
         $solicitudIds = SolicitudDisponibilidad::query()
             ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
-            ->whereDate('fecha', '>=', now()->toDateString())
-            ->where(function ($q) {
-                $q->whereNull('expires_at')
-                    ->orWhere('expires_at', '>', now());
-            })
             ->when(
                 $this->solicitudId !== null,
                 fn ($query) => $query->whereKey($this->solicitudId),
@@ -48,15 +46,11 @@ class GenerarOfertasInteligentesDesdeSolicitudesJob implements ShouldQueue
                 $matcher,
                 $maxOffersPorSolicitud,
                 $ttlMin,
+                $vencimientoService,
             ): void {
                 $solicitud = SolicitudDisponibilidad::query()
                     ->whereKey($solicitudId)
                     ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
-                    ->whereDate('fecha', '>=', now()->toDateString())
-                    ->where(function ($q) {
-                        $q->whereNull('expires_at')
-                            ->orWhere('expires_at', '>', now());
-                    })
                     ->lockForUpdate()
                     ->first();
 
@@ -69,6 +63,7 @@ class GenerarOfertasInteligentesDesdeSolicitudesJob implements ShouldQueue
                     $matcher,
                     $maxOffersPorSolicitud,
                     $ttlMin,
+                    $vencimientoService,
                 );
             }, 3);
         }
@@ -79,19 +74,9 @@ class GenerarOfertasInteligentesDesdeSolicitudesJob implements ShouldQueue
         SolicitudMatchingService $matcher,
         int $maxOffersPorSolicitud,
         int $ttlMin,
+        SolicitudDisponibilidadVencimientoService $vencimientoService,
     ): void {
-        if ($this->solicitudYaPaso($solicitud)) {
-            $solicitud->update([
-                'estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA,
-            ]);
-
-            return;
-        }
-
-        $slots = $this->generarSlotsDeUnaHora(
-            (string) $solicitud->hora_inicio,
-            (string) $solicitud->hora_fin
-        );
+        $slots = $vencimientoService->slotsFuturosOfertables($solicitud);
 
         if (empty($slots)) {
             return;
@@ -103,11 +88,6 @@ class GenerarOfertasInteligentesDesdeSolicitudesJob implements ShouldQueue
         foreach ($slots as [$slotInicio, $slotFin]) {
             if ($creadasParaSolicitud >= $maxOffersPorSolicitud) {
                 break;
-            }
-
-            // No generar ofertas para horarios ya empezados o vencidos.
-            if ($this->slotYaNoEsOfertable($fecha, $slotInicio)) {
-                continue;
             }
 
             // No generar si el alumno ya tiene un turno en ese horario.
@@ -192,52 +172,6 @@ class GenerarOfertasInteligentesDesdeSolicitudesJob implements ShouldQueue
                 $creadasParaSolicitud++;
             }
         }
-    }
-
-    private function solicitudYaPaso(SolicitudDisponibilidad $solicitud): bool
-    {
-        $fecha = Carbon::parse($solicitud->fecha)->format('Y-m-d');
-        $horaFin = $this->normalizarHora((string) $solicitud->hora_fin);
-
-        return Carbon::parse($fecha.' '.$horaFin)->lte(now());
-    }
-
-    private function slotYaNoEsOfertable(string $fecha, string $slotInicio): bool
-    {
-        return Carbon::parse($fecha.' '.$this->normalizarHora($slotInicio))->lte(now());
-    }
-
-    private function generarSlotsDeUnaHora(string $horaInicio, string $horaFin): array
-    {
-        $horaInicio = $this->normalizarHora($horaInicio);
-        $horaFin = $this->normalizarHora($horaFin);
-
-        $inicio = Carbon::createFromFormat('H:i:s', $horaInicio);
-        $fin = Carbon::createFromFormat('H:i:s', $horaFin);
-
-        if ($inicio->gte($fin)) {
-            return [];
-        }
-
-        $slots = [];
-        $cursor = $inicio->copy();
-
-        while ($cursor->lt($fin)) {
-            $siguiente = $cursor->copy()->addHour();
-
-            if ($siguiente->gt($fin)) {
-                break;
-            }
-
-            $slots[] = [
-                $cursor->format('H:i:s'),
-                $siguiente->format('H:i:s'),
-            ];
-
-            $cursor = $siguiente;
-        }
-
-        return $slots;
     }
 
     private function alumnoTieneChoque(int $alumnoId, string $fecha, string $slotInicio, string $slotFin): bool

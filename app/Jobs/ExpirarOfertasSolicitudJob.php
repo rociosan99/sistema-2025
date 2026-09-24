@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\OfertaSolicitud;
-use App\Models\SolicitudDisponibilidad;
+use App\Services\SolicitudDisponibilidadVencimientoService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -14,7 +14,7 @@ class ExpirarOfertasSolicitudJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function handle(): void
+    public function handle(SolicitudDisponibilidadVencimientoService $vencimientoService): void
     {
         OfertaSolicitud::query()
             ->where('estado', OfertaSolicitud::ESTADO_PENDIENTE)
@@ -23,12 +23,6 @@ class ExpirarOfertasSolicitudJob implements ShouldQueue
                 'estado' => OfertaSolicitud::ESTADO_EXPIRADA,
             ]);
 
-        SolicitudDisponibilidad::query()
-            ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
-            ->whereNotNull('expires_at')
-            ->where('expires_at', '<=', now())
-            ->update([
-                'estado' => SolicitudDisponibilidad::ESTADO_EXPIRADA,
-            ]);
+        $vencimientoService->sincronizarActivas();
     }
 }

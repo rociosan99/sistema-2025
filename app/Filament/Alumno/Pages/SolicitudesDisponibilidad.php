@@ -6,6 +6,7 @@ use App\Jobs\GenerarOfertasInteligentesDesdeSolicitudesJob;
 use App\Models\Materia;
 use App\Models\SolicitudDisponibilidad;
 use App\Models\Tema;
+use App\Services\SolicitudDisponibilidadVencimientoService;
 use BackedEnum;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
@@ -40,11 +41,18 @@ class SolicitudesDisponibilidad extends Page
 
     public function cargarMisSolicitudes(): void
     {
+        $vencimientoService = app(SolicitudDisponibilidadVencimientoService::class);
+        $vencimientoService->sincronizarActivas(alumnoId: (int) Auth::id());
+
         $this->misSolicitudes = SolicitudDisponibilidad::query()
             ->where('alumno_id', Auth::id())
+            ->where('estado', SolicitudDisponibilidad::ESTADO_ACTIVA)
             ->orderByDesc('created_at')
             ->with(['materia', 'tema'])
             ->get()
+            ->filter(fn (SolicitudDisponibilidad $solicitud): bool =>
+                $vencimientoService->tieneSlotFuturoOfertable($solicitud)
+            )
             ->map(fn ($s) => [
                 'id' => $s->id,
                 'estado' => $s->estado,

@@ -25,7 +25,8 @@ class UserResource extends Resource
     protected static BackedEnum|string|null $navigationIcon = 'heroicon-o-users';
 
     protected static ?string $navigationLabel = 'Usuarios';
-    protected static ?string $pluralLabel = 'Usuarios';
+    protected static ?string $modelLabel = 'usuario';
+    protected static ?string $pluralModelLabel = 'usuarios';
     protected static ?string $slug = 'usuarios';
 
     public static function form(Schema $schema): Schema
