@@ -30,7 +30,7 @@ class SolicitudUbicacionResource extends Resource
     protected static ?string $modelLabel = 'Solicitud de ubicacion';
     protected static ?string $pluralModelLabel = 'Solicitudes de ubicacion';
     protected static string|UnitEnum|null $navigationGroup = 'Administracion';
-    protected static ?int $navigationSort = 30;
+    protected static ?int $navigationSort = 50;
 
     public static function getNavigationBadge(): ?string
     {
