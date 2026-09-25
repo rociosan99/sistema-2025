@@ -20,7 +20,7 @@ class RecordatorioPagoTurno extends Mailable
     {
         return $this
             ->subject('Recordatorio: falta abonar tu clase')
-            ->view('mails.recordatorio-pago-turno', [
+            ->view('emails.recordatorio-pago-turno', [
                 'turno'   => $this->turno,
                 'urlPago' => $this->urlPago,
             ]);

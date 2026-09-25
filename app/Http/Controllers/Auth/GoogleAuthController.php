@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Turno;
+use App\Services\AccesoMailAlumnoService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
@@ -23,6 +25,27 @@ class GoogleAuthController extends Controller
         $panel = request('panel', 'alumno');
         if (! in_array($panel, ['alumno', 'profesor'], true)) {
             $panel = 'alumno';
+        }
+
+        $acceso = app(AccesoMailAlumnoService::class);
+        $destino = (string) parse_url((string) session('url.intended', ''), PHP_URL_PATH);
+
+        if ($panel === 'alumno' && $acceso->esDestino($destino)) {
+            abort_unless(
+                rtrim((string) config('services.google.redirect'), '/') === $acceso->origen().'/auth/google/callback',
+                503,
+                'GOOGLE_REDIRECT_URI debe ser APP_URL seguido de /auth/google/callback.',
+            );
+
+            if (request()->getSchemeAndHttpHost() !== $acceso->origen()) {
+                // Volver a entrar por el enlace firmado en el dominio correcto.
+                // No transportar cookies, credenciales ni sesiones entre dominios.
+                $turno = Turno::query()->findOrFail(basename($destino));
+
+                return redirect()->away($acceso->firmar($destino, (int) $turno->alumno_id, now()->addMinutes(5)));
+            }
+
+            session()->put('url.intended', $acceso->origen().$destino);
         }
 
         return $this->provider()

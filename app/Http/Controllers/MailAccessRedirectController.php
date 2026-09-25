@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AccesoMailAlumnoService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -22,6 +24,15 @@ class MailAccessRedirectController extends Controller
         // Solo permitimos rutas internas relativas
         abort_unless(str_starts_with($targetPath, '/'), 403);
         abort_unless(! str_starts_with($targetPath, '//'), 403);
+
+        if ($panel === 'alumno') {
+            return app(AccesoMailAlumnoService::class)->continuar(
+                $request,
+                $targetPath,
+                $request->integer('alumno'),
+                $request->has('expires') ? Carbon::createFromTimestamp($request->integer('expires')) : null,
+            );
+        }
 
         if ($panel === 'profesor') {
             $profesorId = $request->integer('profesor');

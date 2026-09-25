@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Filament\Alumno\Pages\CompletarPagoTurno;
+use App\Services\AccesoMailAlumnoService;
 use App\Models\Pago;
 use App\Models\Turno;
 use App\Services\AplicacionCreditoService;
@@ -11,7 +11,6 @@ use App\Services\CreditoService;
 use App\Services\MercadoPagoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use MercadoPago\Client\Payment\PaymentClient;
@@ -113,6 +112,7 @@ class MercadoPagoController extends Controller
      */
     public function pagarDesdeMail(Request $request, Turno $turno)
     {
+        abort_unless($request->hasValidSignature(), 403);
         $alumnoId = (int) $request->query('alumno_id');
 
         if (! $alumnoId) {
@@ -123,33 +123,14 @@ class MercadoPagoController extends Controller
             abort(403, 'No autorizado.');
         }
 
-        $destino = CompletarPagoTurno::getUrl(
-            ['record' => $turno->id],
-            panel: 'alumno',
+        $acceso = app(AccesoMailAlumnoService::class);
+
+        return $acceso->continuar(
+            $request,
+            $acceso->destinoPago($turno),
+            $alumnoId,
+            $request->has('expires') ? Carbon::createFromTimestamp($request->integer('expires')) : null,
         );
-        $usuarioActual = Auth::user();
-
-        if (
-            $usuarioActual
-            && $usuarioActual->role === 'alumno'
-            && (int) $usuarioActual->id === $alumnoId
-        ) {
-            return redirect($destino);
-        }
-
-        foreach (['web', 'alumno', 'profesor', 'admin'] as $guard) {
-            if (array_key_exists($guard, config('auth.guards', []))) {
-                Auth::guard($guard)->logout();
-            }
-        }
-
-        if ($request->hasSession()) {
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-            $request->session()->put('url.intended', $destino);
-        }
-
-        return redirect('/alumno/login');
     }
 
     public function success(Request $request, Turno $turno)

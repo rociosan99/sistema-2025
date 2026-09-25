@@ -13,7 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\URL;
+use App\Services\AccesoMailAlumnoService;
 
 class EnviarRecordatorioPago24hJob implements ShouldQueue
 {
@@ -55,11 +55,8 @@ class EnviarRecordatorioPago24hJob implements ShouldQueue
                 continue;
             }
 
-            // Link firmado para pagar desde mail (sin login)
-            $urlPago = URL::signedRoute('mp.pagar.mail', [
-                'turno' => $turno->id,
-                'alumno_id' => $turno->alumno_id,
-            ]);
+            // Acceso autenticado al pago, firmado desde el origen can?nico.
+            $urlPago = app(AccesoMailAlumnoService::class)->enlacePago($turno);
 
             Mail::to($turno->alumno->email)->send(
                 new RecordatorioPagoTurno($turno, $urlPago)
