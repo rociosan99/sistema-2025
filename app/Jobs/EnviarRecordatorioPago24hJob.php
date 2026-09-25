@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\RecordatorioPagoTurno;
 use App\Models\Pago;
 use App\Models\Turno;
+use App\Services\AccesoMailAlumnoService;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,7 +14,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use App\Services\AccesoMailAlumnoService;
 
 class EnviarRecordatorioPago24hJob implements ShouldQueue
 {
@@ -55,7 +55,7 @@ class EnviarRecordatorioPago24hJob implements ShouldQueue
                 continue;
             }
 
-            // Acceso autenticado al pago, firmado desde el origen can?nico.
+            // Acceso autenticado al pago, firmado desde el origen canónico.
             $urlPago = app(AccesoMailAlumnoService::class)->enlacePago($turno);
 
             Mail::to($turno->alumno->email)->send(

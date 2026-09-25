@@ -15,6 +15,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -80,6 +82,11 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->extraAttributes(['class' => 'usuarios-admin-table'])
+            ->header(view('filament.admin.resources.users.table-filters-styles'))
+            ->filtersLayout(FiltersLayout::AboveContent)
+            ->filtersFormColumns(2)
+            ->searchPlaceholder('Buscar por nombre, apellido o email')
             ->columns([
                 TextColumn::make('id')
                     ->label('ID')
@@ -118,7 +125,26 @@ class UserResource extends Resource
 
                 TextColumn::make('created_at')
                     ->label('Creado')
-                    ->dateTime('d/m/Y'),
+                    ->dateTime('d/m/Y')
+                    ->sortable(),
+            ])
+            ->filters([
+                SelectFilter::make('role')
+                    ->label('Rol')
+                    ->options([
+                        'alumno' => 'Alumno',
+                        'profesor' => 'Profesor',
+                        'admin' => 'Administrador',
+                    ])
+                    ->native(false),
+
+                SelectFilter::make('activo')
+                    ->label('Estado')
+                    ->options([
+                        1 => 'Activo',
+                        0 => 'Dado de baja',
+                    ])
+                    ->native(false),
             ])
             ->recordActions([
                 EditAction::make()->label('Editar'),
