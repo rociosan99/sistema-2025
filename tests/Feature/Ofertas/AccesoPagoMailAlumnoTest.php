@@ -199,7 +199,7 @@ class AccesoPagoMailAlumnoTest extends TestCase
             'https://externo.example.test/alumno/completar-pago/1',
             '//externo.example.test', '/alumno/completar-pago/1?next=/admin',
             '/alumno/completar-pago/../1', '/alumno/completar-pago/0',
-            '/alumno/resolver-suspension/1', '/alumno/turnos/1', '/reemplazos/1/aceptar',
+            '/alumno/turnos/1', '/reemplazos/1/aceptar',
         ]);
     }
 

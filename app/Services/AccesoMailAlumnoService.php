@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Filament\Alumno\Pages\ResponderOfertaProfesor;
+use App\Filament\Alumno\Pages\ResolverSuspension;
 use App\Models\Turno;
 use DateTimeInterface;
 use Illuminate\Http\RedirectResponse;
@@ -15,6 +16,7 @@ class AccesoMailAlumnoService
     private const DESTINOS = [
         'propuesta' => '/alumno/responder-oferta-profesor/',
         'pago' => '/alumno/completar-pago/',
+        'suspension' => '/alumno/resolver-suspension/',
     ];
 
     public function origen(): string
@@ -67,6 +69,19 @@ class AccesoMailAlumnoService
     {
         // Mantener la vigencia del enlace de pago anterior: la Page valida el turno.
         return $this->firmar($this->destinoPago($turno), (int) $turno->alumno_id);
+    }
+
+    public function destinoSuspension(Turno $turno): string
+    {
+        return (string) parse_url(ResolverSuspension::getUrl(
+            ['record' => $turno->getKey()], panel: 'alumno',
+        ), PHP_URL_PATH);
+    }
+
+    public function enlaceSuspension(Turno $turno): string
+    {
+        // La Page conserva las validaciones de propietario, estado, pago y horario.
+        return $this->firmar($this->destinoSuspension($turno), (int) $turno->alumno_id);
     }
 
     public function continuar(Request $request, string $path, int $alumnoId, ?DateTimeInterface $vence = null): RedirectResponse

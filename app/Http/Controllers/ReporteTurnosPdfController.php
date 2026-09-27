@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Filament\Pages\Reportes;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
@@ -15,6 +16,16 @@ class ReporteTurnosPdfController extends Controller
         $fechaInicio = (string) $request->query('fechaInicio', now()->subDays(30)->toDateString());
         $fechaFin = (string) $request->query('fechaFin', now()->toDateString());
         $estado = (string) $request->query('estado', '');
+        $emitidoEn = now();
+        $usuario = $request->user();
+        $emitidoPor = trim(implode(' ', array_filter([
+            $usuario?->name,
+            $usuario?->apellido,
+        ])));
+
+        if ($emitidoPor === '') {
+            $emitidoPor = (string) ($usuario?->email ?? 'Administrador');
+        }
 
         $turnos = $this->getTurnosRows($fechaInicio, $fechaFin, $estado);
 
@@ -23,6 +34,11 @@ class ReporteTurnosPdfController extends Controller
             'fechaInicio' => $this->sanitizeUtf8($fechaInicio),
             'fechaFin' => $this->sanitizeUtf8($fechaFin),
             'estado' => $this->sanitizeUtf8($estado),
+            'estadoLabel' => $estado !== '' ? Reportes::estadoLabel($estado) : 'Todos',
+            'emitidoPor' => $this->sanitizeUtf8($emitidoPor),
+            'fechaEmision' => $emitidoEn->format('d/m/Y'),
+            'horaEmision' => $emitidoEn->format('H:i'),
+            'nombreSistema' => $this->sanitizeUtf8((string) config('app.name')),
         ]);
 
         return $pdf->download('reporte_turnos_' . now()->format('Ymd_His') . '.pdf');
@@ -37,8 +53,10 @@ class ReporteTurnosPdfController extends Controller
             ->leftJoin('temas as te', 'te.tema_id', '=', 't.tema_id')
             ->selectRaw("
                 t.id,
-                CONCAT(a.name, ' ', COALESCE(a.apellido, '')) as alumno,
-                CONCAT(p.name, ' ', COALESCE(p.apellido, '')) as profesor,
+                a.name as alumno_nombre,
+                a.apellido as alumno_apellido,
+                p.name as profesor_nombre,
+                p.apellido as profesor_apellido,
                 m.materia_nombre as materia,
                 te.tema_nombre as tema,
                 t.fecha,
@@ -70,8 +88,8 @@ class ReporteTurnosPdfController extends Controller
         return $rows->map(function ($r) {
             return [
                 'id' => (int) $r->id,
-                'alumno' => $this->sanitizeUtf8(trim((string) $r->alumno)),
-                'profesor' => $this->sanitizeUtf8(trim((string) $r->profesor)),
+                'alumno' => $this->sanitizeUtf8(trim("{$r->alumno_nombre} {$r->alumno_apellido}")),
+                'profesor' => $this->sanitizeUtf8(trim("{$r->profesor_nombre} {$r->profesor_apellido}")),
                 'materia' => $this->sanitizeUtf8((string) $r->materia),
                 'tema' => $this->sanitizeUtf8($r->tema ? (string) $r->tema : '-'),
                 'fecha' => (string) $r->fecha,

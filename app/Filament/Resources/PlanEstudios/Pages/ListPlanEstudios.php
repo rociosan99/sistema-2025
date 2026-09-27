@@ -16,4 +16,11 @@ class ListPlanEstudios extends ListRecords
             CreateAction::make(),
         ];
     }
+
+    public function resetTableFiltersForm(): void
+    {
+        parent::resetTableFiltersForm();
+
+        $this->resetTableSearch();
+    }
 }

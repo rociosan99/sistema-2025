@@ -5,8 +5,11 @@ namespace App\Filament\Pages;
 use App\Models\Turno;
 use Filament\Pages\Page;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 
 class Reportes extends Page
 {
@@ -25,13 +28,23 @@ class Reportes extends Page
     /** @var array<int, array<string, mixed>> */
     public array $turnos = [];
 
+    #[Locked]
+    public string $emitidoEn = '';
+
     public function mount(): void
     {
         $this->fechaFin = now()->toDateString();
         $this->fechaInicio = now()->subDays(30)->toDateString();
         $this->estado = '';
+        $this->actualizarMomentoEmision();
 
         $this->cargarDatos();
+    }
+
+    public function prepararImpresion(): void
+    {
+        $this->actualizarMomentoEmision();
+        $this->dispatch('imprimir-reporte');
     }
 
     public function aplicarFiltros(): void
@@ -64,8 +77,10 @@ class Reportes extends Page
             ->leftJoin('temas as te', 'te.tema_id', '=', 't.tema_id')
             ->selectRaw("
                 t.id,
-                CONCAT(a.name, ' ', COALESCE(a.apellido, '')) as alumno,
-                CONCAT(p.name, ' ', COALESCE(p.apellido, '')) as profesor,
+                a.name as alumno_nombre,
+                a.apellido as alumno_apellido,
+                p.name as profesor_nombre,
+                p.apellido as profesor_apellido,
                 m.materia_nombre as materia,
                 te.tema_nombre as tema,
                 t.fecha,
@@ -97,8 +112,8 @@ class Reportes extends Page
         return $rows->map(function ($r) {
             return [
                 'id' => (int) $r->id,
-                'alumno' => $this->sanitizeUtf8(trim((string) $r->alumno)),
-                'profesor' => $this->sanitizeUtf8(trim((string) $r->profesor)),
+                'alumno' => $this->sanitizeUtf8(trim("{$r->alumno_nombre} {$r->alumno_apellido}")),
+                'profesor' => $this->sanitizeUtf8(trim("{$r->profesor_nombre} {$r->profesor_apellido}")),
                 'materia' => $this->sanitizeUtf8((string) $r->materia),
                 'tema' => $this->sanitizeUtf8($r->tema ? (string) $r->tema : '-'),
                 'fecha' => (string) $r->fecha,
@@ -113,6 +128,64 @@ class Reportes extends Page
     private function cargarDatos(): void
     {
         $this->turnos = $this->getTurnosRows();
+    }
+
+    private function actualizarMomentoEmision(): void
+    {
+        $this->emitidoEn = now()->toIso8601String();
+    }
+
+    public function emitidoPor(): string
+    {
+        $usuario = Auth::user();
+
+        if (! $usuario) {
+            return 'Administrador';
+        }
+
+        $nombreCompleto = trim(implode(' ', array_filter([
+            $usuario->name,
+            $usuario->apellido,
+        ])));
+
+        return $nombreCompleto !== '' ? $nombreCompleto : (string) $usuario->email;
+    }
+
+    public function fechaEmision(): string
+    {
+        return Carbon::parse($this->emitidoEn)->timezone(config('app.timezone'))->format('d/m/Y');
+    }
+
+    public function horaEmision(): string
+    {
+        return Carbon::parse($this->emitidoEn)->timezone(config('app.timezone'))->format('H:i');
+    }
+
+    public function periodoAnalizado(): string
+    {
+        if ($this->fechaInicio && $this->fechaFin) {
+            return $this->formatearFecha($this->fechaInicio).' al '.$this->formatearFecha($this->fechaFin);
+        }
+
+        if ($this->fechaInicio) {
+            return 'Desde '.$this->formatearFecha($this->fechaInicio);
+        }
+
+        if ($this->fechaFin) {
+            return 'Hasta '.$this->formatearFecha($this->fechaFin);
+        }
+
+        return 'Todos los registros';
+    }
+
+    public function estadoAplicado(): string
+    {
+        return $this->estado !== '' ? self::estadoLabel($this->estado) : 'Todos';
+    }
+
+    public function formatearFecha(?string $fecha): string
+    {
+        return $fecha ? Carbon::parse($fecha)->format('d/m/Y') : '-';
     }
 
     private function sanitizeUtf8(?string $value): string

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Temas\Tables;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Actions;
+use Illuminate\Database\Eloquent\Builder;
 
 class TemasTable
 {
@@ -23,6 +24,9 @@ class TemasTable
 
                 Tables\Columns\TextColumn::make('parent.tema_nombre')
                     ->label('Tema padre')
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query
+                        ->whereHas('parent', fn (Builder $query): Builder => $query
+                            ->where('tema_nombre', 'like', "%{$search}%")))
                     ->badge()
                     ->placeholder('—'),
 

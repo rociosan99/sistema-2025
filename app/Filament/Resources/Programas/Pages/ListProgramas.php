@@ -16,4 +16,11 @@ class ListProgramas extends ListRecords
             Actions\CreateAction::make()->label('Crear Programa'),
         ];
     }
+
+    public function resetTableFiltersForm(): void
+    {
+        parent::resetTableFiltersForm();
+
+        $this->resetTableSearch();
+    }
 }

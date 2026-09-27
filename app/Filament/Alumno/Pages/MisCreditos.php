@@ -6,10 +6,17 @@ use App\Models\Credito;
 use App\Services\CreditoService;
 use BackedEnum;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator as Paginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
+use Livewire\WithPagination;
 
 class MisCreditos extends Page
 {
+    use WithPagination;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
 
     protected static ?string $navigationLabel = 'Mis créditos';
@@ -22,25 +29,97 @@ class MisCreditos extends Page
 
     public string $saldoDisponible = '0.00';
 
-    /** @var array<int, array<string, int|string|null>> */
-    public array $historial = [];
+    public ?string $estado = null;
+
+    public ?string $desde = null;
+
+    public ?string $hasta = null;
+
+    public string $buscar = '';
+
+    public int $porPagina = 10;
 
     public function mount(CreditoService $creditoService): void
     {
         $alumnoId = (int) Auth::id();
 
         $this->saldoDisponible = $creditoService->saldoDisponible($alumnoId);
+    }
 
-        $this->historial = Credito::query()
+    protected function getViewData(): array
+    {
+        return [
+            'historial' => $this->historialPaginado(),
+            'estadoOptions' => $this->estadoOptions(),
+        ];
+    }
+
+    public function aplicarFiltros(): void
+    {
+        $this->validate([
+            'estado' => ['nullable', Rule::in(array_keys($this->estadoOptions()))],
+            'desde' => ['nullable', 'date'],
+            'hasta' => ['nullable', 'date', 'after_or_equal:desde'],
+            'buscar' => ['nullable', 'string', 'max:50'],
+            'porPagina' => ['required', Rule::in([10, 25, 50])],
+        ], [
+            'hasta.after_or_equal' => 'La fecha Hasta no puede ser anterior a Desde.',
+        ]);
+
+        $this->resetPage(pageName: 'creditosPage');
+    }
+
+    public function resetearFiltros(): void
+    {
+        $this->reset(['estado', 'desde', 'hasta', 'buscar']);
+        $this->resetValidation();
+        $this->resetPage(pageName: 'creditosPage');
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['estado', 'desde', 'hasta', 'buscar', 'porPagina'], true)) {
+            $this->resetPage(pageName: 'creditosPage');
+        }
+    }
+
+    public function historialPaginado(): LengthAwarePaginator
+    {
+        $alumnoId = (int) Auth::id();
+        $estadosValidos = array_keys($this->estadoOptions());
+        $porPagina = in_array($this->porPagina, [10, 25, 50], true) ? $this->porPagina : 10;
+        $turnoBuscado = trim($this->buscar);
+
+        /** @var Paginator $paginador */
+        $paginador = Credito::query()
             ->where('alumno_id', $alumnoId)
             ->with('turno:id,fecha,hora_inicio,hora_fin')
+            ->when(
+                in_array($this->estado, $estadosValidos, true),
+                fn (Builder $query): Builder => $query->where('estado', $this->estado),
+            )
+            ->when(
+                filled($this->desde),
+                fn (Builder $query): Builder => $query->whereDate('cancelado_at', '>=', $this->desde),
+            )
+            ->when(
+                filled($this->hasta),
+                fn (Builder $query): Builder => $query->whereDate('cancelado_at', '<=', $this->hasta),
+            )
+            ->when(
+                $turnoBuscado !== '',
+                fn (Builder $query): Builder => ctype_digit($turnoBuscado)
+                    ? $query->where('turno_id', (int) $turnoBuscado)
+                    : $query->whereRaw('1 = 0'),
+            )
             ->orderByDesc('cancelado_at')
             ->orderByDesc('id')
-            ->get()
-            ->map(fn (Credito $credito) => [
+            ->paginate($porPagina, ['*'], 'creditosPage');
+
+        return $paginador->through(fn (Credito $credito): array => [
                 'id' => $credito->id,
                 'turno_id' => $credito->turno_id,
-                'fecha' => $credito->cancelado_at->format('d/m/Y H:i'),
+                'fecha' => $credito->cancelado_at?->format('d/m/Y H:i') ?? '-',
                 'turno_fecha' => $credito->turno?->fecha?->format('d/m/Y') ?? '-',
                 'turno_horario' => $credito->turno
                     ? substr((string) $credito->turno->hora_inicio, 0, 5)
@@ -56,8 +135,17 @@ class MisCreditos extends Page
                 'porcentaje_credito' => $credito->porcentaje_credito_aplicado,
                 'porcentaje_penalizacion' => $credito->porcentaje_penalizacion_aplicado,
                 'horas_limite' => $credito->horas_limite_aplicadas,
-            ])
-            ->all();
+            ]);
+    }
+
+    /** @return array<string, string> */
+    public function estadoOptions(): array
+    {
+        return [
+            Credito::ESTADO_ESPERANDO_PAGO => 'Esperando pago',
+            Credito::ESTADO_DISPONIBLE => 'Disponible',
+            Credito::ESTADO_NO_APLICA => 'No corresponde',
+        ];
     }
 
     private function estadoVisual(Credito $credito): string
