@@ -328,11 +328,11 @@ class Auditoria extends Page
     private function formatFecha(mixed $value): string
     {
         if ($value instanceof \DateTimeInterface) {
-            return $value->format('Y-m-d H:i:s');
+            return $value->format('d/m/Y H:i');
         }
 
         try {
-            return Carbon::parse((string) $value)->format('Y-m-d H:i:s');
+            return Carbon::parse((string) $value)->format('d/m/Y H:i');
         } catch (\Throwable) {
             return (string) $value;
         }

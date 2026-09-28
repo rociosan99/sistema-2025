@@ -27,6 +27,12 @@ class Dashboard extends Page
 
     protected string $view = 'filament.profesor.pages.dashboard';
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        // Filament elige el inicio desde el menú en esta ruta, que solo redirige.
+        return request()->routeIs('filament.profesor.home');
+    }
+
     public array $materias = [];
     public array $temas = [];
 

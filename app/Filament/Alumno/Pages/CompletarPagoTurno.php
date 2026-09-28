@@ -11,6 +11,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Locked;
 
 class CompletarPagoTurno extends Page
 {
@@ -25,6 +26,9 @@ class CompletarPagoTurno extends Page
     /** @var array{precio_total:string, credito_disponible:string, credito_aplicable:string, diferencia:string, cubre_total:bool} */
     public array $resumen = [];
     public bool $usarCredito = false;
+
+    #[Locked]
+    public bool $mostrarModalExito = false;
 
     public function mount(int|string $record): void
     {
@@ -65,6 +69,10 @@ class CompletarPagoTurno extends Page
 
     public function confirmarPagoConCredito(AplicacionCreditoService $servicio): void
     {
+        if ($this->mostrarModalExito) {
+            return;
+        }
+
         if (! $this->usarCredito) {
             Notification::make()->title('Seleccioná Usar mi crédito')->warning()->send();
             return;
@@ -86,13 +94,8 @@ class CompletarPagoTurno extends Page
 
             $servicio->pagarTotalmenteConCredito($this->turno, (int) Auth::id());
 
-            Notification::make()
-                ->title('Pago realizado con crédito')
-                ->body('La clase quedó confirmada.')
-                ->success()
-                ->send();
-
-            $this->redirect(TurnoResource::getUrl('index', panel: 'alumno'));
+            // El servicio ya terminó la transacción: recién ahora mostramos el éxito.
+            $this->mostrarModalExito = true;
         } catch (ValidationException $exception) {
             Notification::make()
                 ->title('No se pudo completar el pago')
@@ -100,6 +103,16 @@ class CompletarPagoTurno extends Page
                 ->danger()
                 ->send();
         }
+    }
+
+    public function cerrarModalExito(): void
+    {
+        if (! $this->mostrarModalExito) {
+            return;
+        }
+
+        $this->mostrarModalExito = false;
+        $this->redirect(TurnoResource::getUrl('index', panel: 'alumno'));
     }
 
     public function continuarConPagoMixto(AplicacionCreditoService $servicio): void

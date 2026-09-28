@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <title>Reporte de Turnos</title>
     <style>
-        @page { size: landscape; margin: 28px 30px 45px; }
+        @page { size: landscape; margin: 28px 30px 65px; }
         body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #111827; }
         .encabezado { text-align: center; border-bottom: 2px solid #111827; padding-bottom: 10px; margin-bottom: 12px; }
-        .sistema { font-size: 18px; font-weight: bold; text-transform: uppercase; }
+        .sistema { font-size: 18px; font-weight: bold; }
         .titulo { font-size: 14px; font-weight: bold; margin-top: 4px; }
         .identificacion { width: 100%; margin-bottom: 10px; }
         .identificacion td { border: 0; padding: 2px 5px; width: 50%; }

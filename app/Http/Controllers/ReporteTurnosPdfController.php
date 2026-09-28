@@ -38,8 +38,27 @@ class ReporteTurnosPdfController extends Controller
             'emitidoPor' => $this->sanitizeUtf8($emitidoPor),
             'fechaEmision' => $emitidoEn->format('d/m/Y'),
             'horaEmision' => $emitidoEn->format('H:i'),
-            'nombreSistema' => $this->sanitizeUtf8((string) config('app.name')),
+            'nombreSistema' => 'TutorLine',
         ]);
+
+        // El total definitivo de páginas está disponible después del renderizado.
+        $pdf->render();
+        $pdf->getDomPDF()->getCanvas()->page_script(function ($pagina, $total, $canvas, $fuentes): void {
+            $texto = "Página {$pagina} de {$total}";
+            $fuente = $fuentes->getFont('DejaVu Sans', 'normal');
+            $tamano = 6;
+            $ancho = $fuentes->getTextWidth($texto, $fuente, $tamano);
+
+            // Canvas usa puntos: 22,5 pt equivalen al margen lateral de 30 px del PDF.
+            $canvas->text(
+                $canvas->get_width() - 22.5 - $ancho,
+                $canvas->get_height() - 15,
+                $texto,
+                $fuente,
+                $tamano,
+                [0.29, 0.33, 0.39],
+            );
+        });
 
         return $pdf->download('reporte_turnos_' . now()->format('Ymd_His') . '.pdf');
     }

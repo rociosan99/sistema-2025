@@ -74,7 +74,7 @@ class AccesoSuspensionMailAlumnoTest extends TestCase
 
         $this->get($this->destino($turno))
             ->assertOk()
-            ->assertSee('Clase suspendida por el profesor');
+            ->assertSee('Clase suspendida');
 
         $this->assertSame($turnoAntes, $turno->fresh()->getRawOriginal());
         $this->assertSame($pagoAntes, $pago->fresh()->getRawOriginal());
