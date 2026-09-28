@@ -26,8 +26,13 @@ class ProfesorPanelProvider extends PanelProvider
             ->path('profesor')
             ->login()
             ->authGuard('web')
+            ->globalSearch(false)
             ->colors(['primary' => Color::Indigo])
-            ->brandName('Portal Profesores')
+            ->brandName('Panel del Profesor')
+            ->brandLogo(fn () => view('filament.components.panel-brand', [
+                'panelName' => 'Panel del Profesor',
+            ]))
+            ->brandLogoHeight('2.5rem')
             ->discoverResources(
                 in: app_path('Filament/Profesor/Resources'),
                 for: 'App\\Filament\\Profesor\\Resources'
@@ -38,6 +43,10 @@ class ProfesorPanelProvider extends PanelProvider
             )
 
             // ✅ Inserta el botón Google debajo del formulario de login
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
+                fn () => view('filament.auth.tutorline-logo'),
+            )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
                 fn () => view('filament.auth.google-button'),

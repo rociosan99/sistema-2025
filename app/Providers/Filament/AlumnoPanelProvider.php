@@ -27,8 +27,13 @@ class AlumnoPanelProvider extends PanelProvider
             ->path('alumno')
             ->login()
             ->authGuard('web')
+            ->globalSearch(false)
             ->colors(['primary' => Color::Sky])
-            ->brandName('Portal Alumnos')
+            ->brandName('Panel del Alumno')
+            ->brandLogo(fn () => view('filament.components.panel-brand', [
+                'panelName' => 'Panel del Alumno',
+            ]))
+            ->brandLogoHeight('2.5rem')
             ->discoverResources(in: app_path('Filament/Alumno/Resources'), for: 'App\\Filament\\Alumno\\Resources')
             ->discoverPages(in: app_path('Filament/Alumno/Pages'), for: 'App\\Filament\\Alumno\\Pages')
             ->pages([
@@ -36,6 +41,10 @@ class AlumnoPanelProvider extends PanelProvider
             ])
 
             // ✅ Inserta el botón Google debajo del formulario de login
+            ->renderHook(
+                PanelsRenderHook::AUTH_LOGIN_FORM_BEFORE,
+                fn () => view('filament.auth.tutorline-logo'),
+            )
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
                 fn () => view('filament.auth.google-button'),
