@@ -17,10 +17,4 @@ class ListPlanEstudios extends ListRecords
         ];
     }
 
-    public function resetTableFiltersForm(): void
-    {
-        parent::resetTableFiltersForm();
-
-        $this->resetTableSearch();
-    }
 }

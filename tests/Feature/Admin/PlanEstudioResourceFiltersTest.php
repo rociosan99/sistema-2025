@@ -12,7 +12,6 @@ use Filament\Forms\Components\Select;
 use Filament\Tables\Enums\FiltersLayout;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PlanEstudioResourceFiltersTest extends TestCase
@@ -126,30 +125,7 @@ class PlanEstudioResourceFiltersTest extends TestCase
             ->assertCanNotSeeTableRecords([$segundo['plan']]);
     }
 
-    #[DataProvider('busquedasGenerales')]
-    public function test_busqueda_general_por_carrera_y_descripcion(
-        string $carrera,
-        string $descripcion,
-        string $busqueda,
-    ): void {
-        $encontrado = $this->crearEscenario('Instituto Norte', $carrera, 2020, $descripcion);
-        $distinto = $this->crearEscenario('Instituto Sur', 'Carrera Diferente', 2021, 'Descripcion distinta');
-
-        Livewire::test(ListPlanEstudios::class)
-            ->searchTable($busqueda)
-            ->assertCanSeeTableRecords([$encontrado['plan']])
-            ->assertCanNotSeeTableRecords([$distinto['plan']]);
-    }
-
-    public static function busquedasGenerales(): array
-    {
-        return [
-            'Carrera' => ['Ingenieria Buscada', 'Descripcion comun', 'Ingenieria Buscada'],
-            'Descripcion' => ['Ingenieria', 'Plan flexible buscado', 'flexible buscado'],
-        ];
-    }
-
-    public function test_combina_institucion_carrera_anio_y_busqueda(): void
+    public function test_combina_institucion_carrera_anio(): void
     {
         $institucion = $this->crearInstitucion('Instituto Objetivo');
         $coincidente = $this->crearEscenarioEnInstitucion($institucion, 'Sistemas', 2020, 'Plan objetivo buscado');
@@ -163,31 +139,66 @@ class PlanEstudioResourceFiltersTest extends TestCase
                 'carrera_id' => $coincidente['carrera']->carrera_id,
                 'anio' => 2020,
             ])
-            ->searchTable('objetivo buscado')
             ->assertCanSeeTableRecords([$coincidente['plan']])
             ->assertCanNotSeeTableRecords([$otroAnio['plan'], $otraCarrera['plan'], $otraInstitucion['plan']]);
     }
 
-    public function test_reset_limpia_filtros_y_busqueda(): void
+    public function test_reset_limpia_institucion_carrera_y_anio(): void
     {
         $primero = $this->crearEscenario('Instituto Norte', 'Sistemas', 2020, 'Plan buscado');
         $segundo = $this->crearEscenario('Instituto Sur', 'Electronica', 2024, 'Plan diferente');
 
         Livewire::test(ListPlanEstudios::class)
-            ->filterTable('plan', ['institucion_id' => $primero['institucion']->institucion_id])
-            ->searchTable('Plan buscado')
+            ->filterTable('plan', [
+                'institucion_id' => $primero['institucion']->institucion_id,
+                'carrera_id' => $primero['carrera']->carrera_id,
+                'anio' => 2020,
+            ])
             ->assertCanNotSeeTableRecords([$segundo['plan']])
             ->call('resetTableFiltersForm')
-            ->assertSet('tableSearch', '')
+            ->assertSet('tableFilters.plan.institucion_id', null)
+            ->assertSet('tableFilters.plan.carrera_id', null)
+            ->assertSet('tableFilters.plan.anio', null)
+            ->assertSet('tableDeferredFilters.plan.institucion_id', null)
+            ->assertSet('tableDeferredFilters.plan.carrera_id', null)
+            ->assertSet('tableDeferredFilters.plan.anio', null)
             ->assertCanSeeTableRecords([$primero['plan'], $segundo['plan']]);
     }
 
     public function test_muestra_los_filtros_sobre_el_contenido(): void
     {
-        $tabla = Livewire::test(ListPlanEstudios::class)->instance()->getTable();
+        $pagina = Livewire::test(ListPlanEstudios::class)
+            ->assertSee('Filtros')
+            ->assertSee('Resetear los filtros')
+            ->assertSee('Aplicar filtros')
+            ->assertDontSee('Buscar por carrera o descripción')
+            ->assertDontSee('fi-ta-search-field', false)
+            ->assertDontSee("content: 'Acción'", false);
+        $tabla = $pagina->instance()->getTable();
 
         $this->assertSame(FiltersLayout::AboveContent, $tabla->getFiltersLayout());
         $this->assertSame(3, $tabla->getFiltersFormColumns());
+        $this->assertFalse($tabla->isSearchable());
+    }
+
+    public function test_anio_utiliza_unicamente_valores_reales_sin_duplicados(): void
+    {
+        $this->crearEscenario('Instituto Norte', 'Sistemas', 2020);
+        $this->crearEscenario('Instituto Sur', 'Electronica', 2024);
+        $this->crearEscenario('Instituto Este', 'Informatica', 2020);
+
+        $this->assertSame([2024 => 2024, 2020 => 2020], $this->obtenerSelect('anio')->getOptions());
+    }
+
+    public function test_la_busqueda_general_ya_no_filtra_registros(): void
+    {
+        $primero = $this->crearEscenario('Instituto Norte', 'Sistemas', 2020, 'Descripcion objetivo');
+        $segundo = $this->crearEscenario('Instituto Sur', 'Electronica', 2024, 'Otra descripcion');
+
+        // Incluso una búsqueda anterior conservada en la URL deja de filtrar columnas.
+        Livewire::test(ListPlanEstudios::class)
+            ->searchTable('objetivo')
+            ->assertCanSeeTableRecords([$primero['plan'], $segundo['plan']]);
     }
 
     private function obtenerSelect(string $nombre, $component = null): Select

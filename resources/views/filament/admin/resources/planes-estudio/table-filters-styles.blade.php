@@ -3,11 +3,10 @@
         .planes-estudio-admin-table .fi-ta-header-ctn {
             display: grid;
             grid-template-columns:
-                minmax(0, 22fr)
-                minmax(0, 22fr)
-                minmax(0, 12fr)
-                minmax(0, 30fr)
-                minmax(7rem, 14fr);
+                minmax(0, 3fr)
+                minmax(0, 3fr)
+                minmax(0, 2fr)
+                minmax(9rem, 2fr);
             column-gap: 0.75rem;
             padding: 1rem 1.5rem;
             align-items: end;
@@ -31,26 +30,18 @@
             grid-column: 1 / 4;
             grid-row: 2;
             grid-template-columns:
-                minmax(0, 22fr)
-                minmax(0, 22fr)
-                minmax(0, 12fr);
+                minmax(0, 3fr)
+                minmax(0, 3fr)
+                minmax(0, 2fr);
             align-self: end;
         }
 
         .planes-estudio-admin-table .fi-ta-filters-apply-action-ctn {
-            grid-column: 5;
+            grid-column: 4;
             grid-row: 2;
             display: grid;
             gap: 0.5rem;
             align-self: end;
-        }
-
-        .planes-estudio-admin-table .fi-ta-filters-apply-action-ctn::before {
-            content: 'Acción';
-            font-size: 0.875rem;
-            line-height: 1.25rem;
-            font-weight: 500;
-            color: var(--gray-950);
         }
 
         .planes-estudio-admin-table .fi-ta-filters-apply-action-ctn .fi-btn {
@@ -63,42 +54,9 @@
             display: none;
         }
 
-        .planes-estudio-admin-table .fi-ta-search-field {
-            grid-column: 4;
-            grid-row: 2;
-            display: grid;
-            gap: 0.5rem;
-            align-self: end;
-            width: 100%;
-        }
-
-        .planes-estudio-admin-table .fi-ta-search-field > label.fi-sr-only {
-            position: static;
-            width: auto;
-            height: auto;
-            padding: 0;
-            margin: 0;
-            overflow: visible;
-            clip: auto;
-            white-space: normal;
-            border: 0;
-            font-size: 0.875rem;
-            line-height: 1.25rem;
-            font-weight: 500;
-            color: var(--gray-950);
-        }
-
-        .planes-estudio-admin-table .fi-ta-search-field .fi-input-wrp {
-            min-height: 2.5rem;
-        }
-
         .dark .planes-estudio-admin-table .fi-ta-header-ctn {
             border-bottom-color: color-mix(in srgb, white 10%, transparent);
         }
 
-        .dark .planes-estudio-admin-table .fi-ta-filters-apply-action-ctn::before,
-        .dark .planes-estudio-admin-table .fi-ta-search-field > label.fi-sr-only {
-            color: white;
-        }
     }
 </style>

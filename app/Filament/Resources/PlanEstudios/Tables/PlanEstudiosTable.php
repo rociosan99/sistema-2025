@@ -24,7 +24,6 @@ class PlanEstudiosTable
             ->header(view('filament.admin.resources.planes-estudio.table-filters-styles'))
             ->filtersLayout(FiltersLayout::AboveContent)
             ->filtersFormColumns(3)
-            ->searchPlaceholder('Buscar por carrera o descripción')
             ->columns([
                 Tables\Columns\TextColumn::make('plan_id')
                     ->label('ID')
@@ -32,15 +31,13 @@ class PlanEstudiosTable
 
                 Tables\Columns\TextColumn::make('carrera.carrera_nombre')
                     ->label('Carrera')
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('plan_anio')
                     ->label('Año')
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('plan_descripcion')
-                    ->searchable()
                     ->label('Descripción')
                     ->limit(60),
             ])
